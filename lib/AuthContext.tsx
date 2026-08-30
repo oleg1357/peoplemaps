@@ -1,0 +1,205 @@
+"use client";
+
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  getLoggedInUserId,
+  clearLoggedInUser,
+  setLoggedInUser,
+  signup as doSignup,
+  login as doLogin,
+  getUser,
+  getNewSpotsSince,
+  getWatchAlerts,
+  markWatchAlertsNotified,
+} from "./store";
+import { supabase, supabaseConfigured } from "./supabase";
+import type { User } from "./data";
+
+interface AuthContextValue {
+  user: User | null;
+  userId: string | null;
+  login: (email: string, password: string) => { ok: boolean; message: string };
+  signup: (
+    firstName: string,
+    lastName: string,
+    email: string,
+    password: string
+  ) => { ok: boolean; message: string };
+  logout: () => void;
+  usingSupabase: boolean;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+const GUEST_ONLY = ["/login", "/signup"];
+const PROTECTED = ["/profile"];
+
+// Minimal shape used across the app for a signed-in user.
+function supabaseUserToAppUser(sbUser: {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+} | null): User | null {
+  if (!sbUser) return null;
+  const md: Record<string, unknown> = sbUser.user_metadata || {};
+  return {
+    id: sbUser.id,
+    email: sbUser.email,
+    firstName:
+      typeof md.first_name === "string"
+        ? md.first_name
+        : typeof md.email === "string"
+          ? md.email
+          : "User",
+    lastName: typeof md.last_name === "string" ? md.last_name : "",
+  } as unknown as User;
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [userId, setUserIdState] = useState<string | null>(null);
+  const [sbUserId, setSbUserId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  const usingSupabase = supabaseConfigured;
+
+  // Hydrate demo (localStorage) user.
+  useEffect(() => {
+    setUserIdState(getLoggedInUserId());
+    setHydrated(true);
+  }, []);
+
+  // Hydrate Supabase session if configured.
+  useEffect(() => {
+    if (!usingSupabase) return;
+    supabase!.auth.getSession().then(({ data }) => {
+      setSbUserId(data.session?.user?.id ?? null);
+    });
+    const {
+      data: { subscription },
+    } = supabase!.auth.onAuthStateChange((_event, session) => {
+      setSbUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, [usingSupabase]);
+
+  const activeUserId = usingSupabase ? sbUserId : userId;
+
+  useEffect(() => {
+    if (!hydrated || !pathname) return;
+    const isGuestOnly = GUEST_ONLY.includes(pathname);
+    const isProtected = PROTECTED.includes(pathname);
+    if (isGuestOnly && activeUserId) {
+      router.replace("/");
+    } else if (isProtected && !activeUserId) {
+      router.replace("/notfound");
+    }
+  }, [hydrated, activeUserId, pathname, router]);
+
+  const demoUser = useMemo(() => getUser(userId), [userId]);
+
+  const login: AuthContextValue["login"] = (email, password) => {
+    if (usingSupabase) {
+      // Fire async; UI callers treat it as ok until a session event updates state.
+      supabase!.auth.signInWithPassword({ email, password }).then(({ error }) => {
+        if (error) {
+          setSbUserId(null);
+        }
+      });
+      return supabaseUILogin();
+    }
+    const res = doLogin(email, password);
+    if (res.ok && res.userId) {
+      setUserIdState(String(res.userId));
+    }
+    return res;
+  };
+
+  const signup: AuthContextValue["signup"] = (firstName, lastName, email, password) => {
+    if (usingSupabase) {
+      supabase!.auth
+        .signUp({
+          email,
+          password,
+          options: {
+            data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim() },
+            emailRedirectTo: window.location.origin + "/login",
+          },
+        })
+        .then(({ error }) => {
+          if (error) {
+            setSbUserId(null);
+          }
+        });
+      return { ok: true, message: "Check your email to confirm your account" };
+    }
+    const res = doSignup(firstName, lastName, email, password);
+    if (res.ok) {
+      setUserIdState(getLoggedInUserId());
+    }
+    return res;
+  };
+
+  const logout = () => {
+    if (usingSupabase) {
+      supabase!.auth.signOut();
+      setSbUserId(null);
+    }
+    clearLoggedInUser();
+    setUserIdState(null);
+    router.push("/about");
+  };
+
+  const value: AuthContextValue = {
+    user: usingSupabase ? supabaseUserToAppUser(sbUserId ? { id: sbUserId } : null) : demoUser,
+    userId: activeUserId,
+    login,
+    signup,
+    logout,
+    usingSupabase,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
+}
+
+function supabaseUILogin(): { ok: boolean; message: string } {
+  return { ok: true, message: "Signing in…" };
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}
+
+export function useNotificationSync() {
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "denied" && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+    const lastVisited = window.localStorage.getItem("peoplemaps_lastVisited");
+    const count = getNewSpotsSince(lastVisited);
+    if (count > 0 && Notification.permission === "granted") {
+      new Notification(`${count} new spot${count === 1 ? "" : "s"} added`, {
+        body: "Since your last visit!",
+      });
+    }
+    const alerts = getWatchAlerts();
+    alerts.forEach((a) => {
+      if (Notification.permission === "granted") {
+        new Notification(`${a.reviewAuthor} added a review`, {
+          body: `"${a.spotName}" you're watching`,
+        });
+      }
+    });
+    if (alerts.length > 0) markWatchAlertsNotified();
+    window.localStorage.setItem("peoplemaps_lastVisited", new Date().toISOString().slice(0, 10));
+  }, []);
+}
+
+export { setLoggedInUser };
