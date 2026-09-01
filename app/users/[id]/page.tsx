@@ -84,7 +84,7 @@ export default function UserProfilePage() {
             {addedSpots.length} added
           </p>
           <Link
-            href="/"
+            href="/map"
             className="action-btn2 logout-btn"
             style={{ textDecoration: "none" }}
           >

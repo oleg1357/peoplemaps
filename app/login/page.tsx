@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { IconMapMarker, IconPlus } from "@/components/icons";
 import { PeopleMapsLogo } from "@/components/Logo";
+import { PageMeta } from "@/components/PageMeta";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -24,6 +25,7 @@ export default function LoginPage() {
 
   return (
     <div className="page">
+      <PageMeta title="Log in — PeopleMaps" description="Log in to PeopleMaps to rate spots, save favourites and add places to the map." noIndex />
       <div className="flex auth-layout" style={{ height: "100%" }}>
         <div className="sign-box">
           <div className="signin auth-card">

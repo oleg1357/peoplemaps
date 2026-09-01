@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   getLoggedInUserId,
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const demoUser = useMemo(() => getUser(userId), [userId]);
 
-  const login: AuthContextValue["login"] = (email, password) => {
+  const login = useCallback<AuthContextValue["login"]>((email, password) => {
     if (usingSupabase) {
       // Fire async; UI callers treat it as ok until a session event updates state.
       supabase!.auth.signInWithPassword({ email, password }).then(({ error }) => {
@@ -115,9 +115,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserIdState(String(res.userId));
     }
     return res;
-  };
+  }, [usingSupabase]);
 
-  const signup: AuthContextValue["signup"] = (firstName, lastName, email, password) => {
+  const signup = useCallback<AuthContextValue["signup"]>((firstName, lastName, email, password) => {
     if (usingSupabase) {
       supabase!.auth
         .signUp({
@@ -140,9 +140,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserIdState(getLoggedInUserId());
     }
     return res;
-  };
+  }, [usingSupabase]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     if (usingSupabase) {
       supabase!.auth.signOut();
       setSbUserId(null);
@@ -150,16 +150,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearLoggedInUser();
     setUserIdState(null);
     router.push("/about");
-  };
+  }, [usingSupabase, router]);
 
-  const value: AuthContextValue = {
-    user: usingSupabase ? supabaseUserToAppUser(sbUserId ? { id: sbUserId } : null) : demoUser,
-    userId: activeUserId,
-    login,
-    signup,
-    logout,
-    usingSupabase,
-  };
+  const value: AuthContextValue = useMemo(
+    () => ({
+      user: usingSupabase ? supabaseUserToAppUser(sbUserId ? { id: sbUserId } : null) : demoUser,
+      userId: activeUserId,
+      login,
+      signup,
+      logout,
+      usingSupabase,
+    }),
+    [usingSupabase, sbUserId, demoUser, activeUserId, login, signup, logout]
+  );
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

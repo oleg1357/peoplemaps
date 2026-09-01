@@ -22,22 +22,37 @@ export function Rating({
     const full = value >= i;
     const half = !full && value >= i - 0.5;
     const width = full ? "100%" : half ? "50%" : "0%";
-    galaxies.push(
-      <button
-        key={i}
-        type="button"
-        disabled={readOnly}
-        className={`star small-${small}`}
-        onClick={() => onChange?.(i)}
-        aria-label={`${i} star`}
-        style={{ color, cursor: readOnly ? "default" : "pointer" }}
-      >
-        <span className="star-base">★</span>
-        <span className="star-fill" style={{ width }}>
-          ★
+    if (readOnly) {
+      galaxies.push(
+        <span
+          key={i}
+          className={`star small-${small}`}
+          aria-hidden="true"
+          style={{ color, cursor: "default" }}
+        >
+          <span className="star-base">★</span>
+          <span className="star-fill" style={{ width }}>
+            ★
+          </span>
         </span>
-      </button>
-    );
+      );
+    } else {
+      galaxies.push(
+        <button
+          key={i}
+          type="button"
+          className={`star small-${small}`}
+          onClick={() => onChange?.(i)}
+          aria-label={`${i} star`}
+          style={{ color, cursor: "pointer" }}
+        >
+          <span className="star-base">★</span>
+          <span className="star-fill" style={{ width }}>
+            ★
+          </span>
+        </button>
+      );
+    }
   }
   return <div className={small ? "rating small" : "rating"}>{galaxies}</div>;
 }

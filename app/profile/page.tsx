@@ -6,6 +6,7 @@ import { getSavedSpots } from "@/lib/store";
 import { backendLive, fetchSavedSpots, fetchSpotById } from "@/lib/api-client";
 import type { SavedSpot } from "@/lib/data";
 import { IconHeart, IconLogout, IconUser } from "@/components/icons";
+import { PageMeta } from "@/components/PageMeta";
 
 interface SavedLocation {
   spotId: string;
@@ -67,6 +68,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page">
+      <PageMeta title="My profile — PeopleMaps" description="Your favourite locations and profile settings." noIndex />
       <div className="flex auth-layout" style={{ height: "100%" }}>
         <div className="profile-box">
           <div className="circle">

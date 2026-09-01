@@ -9,10 +9,10 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { useAuth, useNotificationSync } from "@/lib/AuthContext";
 import { useTheme } from "@/lib/ThemeContext";
-import { tileLayer } from "@/lib/tiles";
+import { tileLayer, MAP_STYLES } from "@/lib/tiles";
+import type { MapStyle } from "@/lib/tiles";
 import {
   getSpotMarkers,
   getSpotDetails,
@@ -30,6 +30,7 @@ import {
 } from "@/lib/store";
 import type { SpotStatus } from "@/lib/store";
 import type { SpotMarker } from "@/lib/data";
+import { CATEGORY_LABELS } from "@/lib/data";
 import { Rating } from "./Rating";
 import {
   IconHeart,
@@ -38,6 +39,8 @@ import {
   IconList,
   IconBell,
   IconComment,
+  IconMapMarker,
+  IconSearch,
 } from "./icons";
 import { ReviewsForm } from "./ReviewsForm";
 import { FavouritesForm } from "./FavouritesForm";
@@ -49,18 +52,8 @@ import { PlacesSidebar } from "./PlacesSidebar";
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
 
-const spotIcon = L.icon({
-  iconUrl: "https://i.ibb.co/hL2mS5V/pin-3.png",
-  iconSize: [40, 40],
-  iconAnchor: [30, 30],
-});
-
-const userIcon = L.divIcon({
-  className: "userLocation",
-  html: '<div style="width:20px;height:20px;border-radius:50%;background:#2986ce;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.4)"></div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
+import { spotIcon, userIcon } from "@/lib/icons";
+import { SpotTooltip } from "./SpotTooltip";
 
 interface DetailsReview {
   id: number;
@@ -95,6 +88,20 @@ function FlyTo({ center }: { center: [number, number] | null }) {
   return null;
 }
 
+function FlyToView({
+  target,
+}: {
+  target: { center: [number, number]; zoom: number } | null;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) {
+      map.flyTo(target.center, target.zoom, { duration: 1.2 });
+    }
+  }, [target, map]);
+  return null;
+}
+
 interface ClusterRow {
   center: [number, number];
   count: number;
@@ -106,11 +113,17 @@ function clusterMarkers(
   zoom: number
 ): Array<SpotMarker | ClusterRow> {
   if (zoom >= 13) return markers;
+  // Cell size in degrees such that each grid cell is about CLUSTER_PIXELS wide
+  // on screen. Scales with zoom, so points only merge when they are visually close,
+  // making clustering much less aggressive at mid zooms.
+  const CLUSTER_PIXELS = 48;
+  const sizeLng = (360 * CLUSTER_PIXELS) / (256 * Math.pow(2, zoom));
   const grid: Record<string, ClusterRow> = {};
-  const size = 0.04;
   markers.forEach((m) => {
-    const gx = Math.floor(m.latlng[0] / size);
-    const gy = Math.floor(m.latlng[1] / size);
+    const cosLat = Math.cos((m.latlng[0] * Math.PI) / 180) || 1;
+    const sizeLat = sizeLng * cosLat;
+    const gx = Math.floor(m.latlng[0] / (sizeLat || 1e-9));
+    const gy = Math.floor(m.latlng[1] / (sizeLng || 1e-9));
     const key = `${gx}:${gy}`;
     if (!grid[key]) {
       grid[key] = { center: [m.latlng[0], m.latlng[1]], count: 0, items: [] };
@@ -129,20 +142,26 @@ function clusterMarkers(
   return out;
 }
 
-function ZoomWatcher({
-  onZoom,
+function ViewWatcher({
+  onMove,
 }: {
-  onZoom: (z: number) => void;
+  onMove: (center: [number, number], zoom: number) => void;
 }) {
   const map = useMap();
   useEffect(() => {
-    const handler = () => onZoom(map.getZoom());
+    const report = () => {
+      const c = map.getCenter();
+      onMove([c.lat, c.lng], map.getZoom());
+    };
+    const handler = () => report();
     map.on("zoomend", handler);
-    onZoom(map.getZoom());
+    map.on("moveend", handler);
+    report();
     return () => {
       map.off("zoomend", handler);
+      map.off("moveend", handler);
     };
-  }, [map, onZoom]);
+  }, [map, onMove]);
   return null;
 }
 
@@ -162,10 +181,30 @@ function statusLabel(s: SpotStatus): string {
   return "Unknown";
 }
 
+function distKm(
+  a: [number, number],
+  b: [number, number] | null
+): number | null {
+  if (!b) return null;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLng = toRad(b[1] - a[1]);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+function formatDistance(km: number): string {
+  if (km < 0.5) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
+}
+
 export function SpotsPage() {
   const { userId } = useAuth();
   const { theme } = useTheme();
-  const tiles = tileLayer(theme);
+  const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
+  const tiles = tileLayer(theme, mapStyle);
   const [markers, setMarkers] = useState<SpotMarker[]>([]);
   const [filterMode, setFilterMode] = useState<"all" | "favourites">("all");
   const [details, setDetails] = useState<SpotMarker | null>(null);
@@ -185,7 +224,11 @@ export function SpotsPage() {
   const [reviewLimit, setReviewLimit] = useState(5);
   const [openComments, setOpenComments] = useState<Set<number>>(new Set());
   const [zoom, setZoom] = useState(12);
-  const onZoom = useCallback((z: number) => setZoom(z), []);
+  const [center, setCenter] = useState<[number, number]>(CENTER);
+  const onMove = useCallback((c: [number, number], z: number) => {
+    setCenter(c);
+    setZoom(z);
+  }, []);
 
   const clusterRows = useMemo(
     () => clusterMarkers(markers, zoom),
@@ -207,6 +250,9 @@ export function SpotsPage() {
   const [addDraft, setAddDraft] = useState<[number, number] | null>(null);
   const flyTarget = useRef<[number, number] | null>(null);
   const locRef = useRef<string | null>(null);
+  const recenterRef = useRef<{ center: [number, number]; zoom: number } | null>(
+    null
+  );
 
   useNotificationSync();
 
@@ -232,6 +278,22 @@ export function SpotsPage() {
     if (typeof window === "undefined") return;
     const loc = new URLSearchParams(window.location.search).get("loc");
     if (loc) locRef.current = loc;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const lat = parseFloat(params.get("lat") ?? "");
+    const lng = parseFloat(params.get("lng") ?? "");
+    const z = parseFloat(params.get("zoom") ?? "");
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      Number.isFinite(z)
+    ) {
+      recenterRef.current = { center: [lat, lng], zoom: z };
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }, []);
 
   useEffect(() => {
@@ -268,6 +330,19 @@ export function SpotsPage() {
 
   const lastActivity = details ? getLatestReviewDate(details.id) : null;
 
+  const reviewCount = detailsData ? detailsData.reviews.length : 0;
+  const ratingBreakdown = useMemo(() => {
+    if (!detailsData || detailsData.reviews.length === 0) return [0, 0, 0, 0, 0];
+    const counts = [0, 0, 0, 0, 0];
+    detailsData.reviews.forEach((r) => {
+      const idx = Math.max(1, Math.min(5, Math.round(r.score))) - 1;
+      counts[idx] += 1;
+    });
+    return counts;
+  }, [detailsData]);
+
+  const distance = details ? distKm(details.latlng, userLocation) : null;
+
   const refreshMarkers = (mode: "all" | "favourites" = filterMode) => {
     setMarkers(
       mode === "all"
@@ -283,6 +358,7 @@ export function SpotsPage() {
             date: "",
             is_saved: 1,
             note: s.note,
+            category: s.category,
           }))
     );
   };
@@ -398,6 +474,38 @@ export function SpotsPage() {
     }
   };
 
+  const [viewCopied, setViewCopied] = useState(false);
+  const copyViewLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/?lat=${center[0].toFixed(5)}&lng=${center[1].toFixed(
+          5
+        )}&zoom=${zoom}`
+      );
+      setViewCopied(true);
+      setTimeout(() => setViewCopied(false), 2000);
+    } catch {
+      setViewCopied(false);
+    }
+  };
+
+  const centerOnMe = () => {
+    if (userLocation) {
+      recenterRef.current = { center: userLocation, zoom: 15 };
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+          setUserLocation(c);
+          recenterRef.current = { center: c, zoom: 15 };
+        },
+        () => setLocationDenied(true)
+      );
+    } else {
+      setLocationDenied(true);
+    }
+  };
+
   const reviewDone = () => {
     setShowReview(false);
     setEditingReview(null);
@@ -447,53 +555,170 @@ export function SpotsPage() {
         {addMode ? "Cancel" : "Add spot"}
       </button>
 
+      <div id="map-controls">
+        <select
+          id="map-style-select"
+          className="places-select"
+          value={mapStyle}
+          onChange={(e) => setMapStyle(e.target.value as MapStyle)}
+          title="Map style"
+        >
+          {MAP_STYLES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          id="gps-fab"
+          className="map-ctrl-btn"
+          onClick={centerOnMe}
+          title="Center on my location"
+        >
+          <IconMapMarker size={16} />
+        </button>
+        <button
+          type="button"
+          id="share-view-fab"
+          className="map-ctrl-btn"
+          onClick={copyViewLink}
+          title="Copy link to this map view"
+        >
+          <IconLink size={16} />
+          {viewCopied ? "Copied!" : "Share view"}
+        </button>
+      </div>
+
       {details && detailsData && (
         <div id="details">
           <div className="details-top">
             <button type="button" id="closeDetails" className="close-btn" onClick={() => setDetails(null)}>
               Close
             </button>
+
+            <div className="card-category-row">
+              <span className="category-chip">
+                {CATEGORY_LABELS[details.category]}
+              </span>
+              <span className={`card-status-pill ${spotStatus}`}>
+                {statusLabel(spotStatus)}
+              </span>
+            </div>
+
             <div className="flex">
               <h2 style={{ margin: 0 }}>{details.brand}</h2>
               <img id="spot-icon" src="https://i.ibb.co/hL2mS5V/pin-3.png" alt="spot" />
             </div>
-            <div className="flex">
-              <h4 style={{ margin: "0 6px 0 0" }}>
-                {parseFloat(String(details.avgScore)).toFixed(1)}
-              </h4>
-              <Rating value={details.avgScore} readOnly />
-            </div>
-            <p style={{ margin: "6px 0 0" }}>
-              {details.street}, {details.city}
-            </p>
-            <div className="status-row">
-              <div className="status-control">
-                {STATUS_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`status-btn ${s} ${spotStatus === s ? "active" : ""}`}
-                    onClick={() => handleStatus(s)}
-                  >
-                    {statusLabel(s)}
-                  </button>
-                ))}
+
+            <div className="card-rating">
+              <div className="card-rating-main">
+                <span className="card-rating-num">
+                  {parseFloat(String(details.avgScore)).toFixed(1)}
+                </span>
+                <Rating value={details.avgScore} readOnly />
+                <span className="card-review-count">
+                  {reviewCount} review{reviewCount === 1 ? "" : "s"}
+                </span>
               </div>
-              <div className="status-actions">
+            </div>
+
+            <div className="card-addr">
+              <IconMapMarker size={13} />
+              <span>
+                {details.street}, {details.city}{" "}
+                {details.zip ? `· ${details.zip}` : ""}
+                {distance !== null && (
+                  <span className="place-dist"> · {formatDistance(distance)} away</span>
+                )}
+              </span>
+            </div>
+
+            <div className="card-status-btns">
+              {STATUS_OPTIONS.map((s) => (
                 <button
+                  key={s}
                   type="button"
-                  className={`copy-link watch ${watching ? "watching" : ""}`}
-                  onClick={handleWatch}
+                  className={`status-btn ${s} ${spotStatus === s ? "active" : ""}`}
+                  onClick={() => handleStatus(s)}
                 >
-                  <IconBell size={14} />
-                  {watching ? "Watching" : "Watch"}
+                  {statusLabel(s)}
                 </button>
-                <button type="button" className="copy-link" onClick={copyLink}>
-                  <IconLink size={14} />
-                  {copied ? "Copied!" : "Copy link"}
-                </button>
-              </div>
+              ))}
             </div>
+
+            <div className="card-actions">
+              <button
+                type="button"
+                className={`copy-link watch ${watching ? "watching" : ""}`}
+                onClick={handleWatch}
+              >
+                <IconBell size={14} />
+                {watching ? "Watching" : "Watch"}
+              </button>
+              <button type="button" className="copy-link" onClick={copyLink}>
+                <IconLink size={14} />
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                className="copy-link"
+                onClick={() => {
+                  flyTarget.current = details.latlng;
+                }}
+              >
+                <IconMapMarker size={14} />
+                Center
+              </button>
+              <button
+                type="button"
+                className="copy-link"
+                onClick={() =>
+                  window.open(
+                    `${window.location.origin}/?loc=${details.id}`,
+                    "_blank"
+                  )
+                }
+              >
+                <IconSearch size={14} />
+                Open
+              </button>
+            </div>
+
+            {reviewCount > 0 && (
+              <div className="card-breakdown">
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const cnt = ratingBreakdown[star - 1];
+                  const pct = reviewCount ? (cnt / reviewCount) * 100 : 0;
+                  return (
+                    <div className="card-breakdown-row" key={star}>
+                      <span className="card-breakdown-label">{star}★</span>
+                      <div className="card-breakdown-bar">
+                        <div className="card-breakdown-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="card-breakdown-num">{cnt}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {detailsData.photos.length > 0 && (
+              <div className="card-photo-strip">
+                {detailsData.photos.slice(0, 4).map((p) => (
+                  <img
+                    key={p.id}
+                    src={p.dataUrl}
+                    alt="spot"
+                    className="card-photo-thumb"
+                  />
+                ))}
+                {photoCount > 4 && (
+                  <span className="card-photo-more">+{photoCount - 4}</span>
+                )}
+              </div>
+            )}
+
             <p className="last-activity">
               Last found: {lastActivity ?? "no records yet"}
               {foundBy !== null && (
@@ -652,6 +877,8 @@ export function SpotsPage() {
         <TileLayer
           attribution={tiles.attribution}
           url={tiles.url}
+          subdomains={tiles.subdomains}
+          maxZoom={tiles.maxZoom}
         />
         {addMode && (
           <AddSpotMapHandler
@@ -659,7 +886,7 @@ export function SpotsPage() {
             onPlace={(latlng) => setAddDraft(latlng)}
           />
         )}
-        <ZoomWatcher onZoom={onZoom} />
+        <ViewWatcher onMove={onMove} />
         {clusterRows.map((row) => {
           if ("count" in row) {
             return (
@@ -673,8 +900,11 @@ export function SpotsPage() {
                   },
                 }}
               >
-                <Tooltip>
-                  <h3>{row.count} spots here</h3>
+                <Tooltip direction="top" offset={[0, -12]}>
+                  <SpotTooltip
+                    name={`${row.count} spots here`}
+                    hint="Click to view"
+                  />
                 </Tooltip>
               </Marker>
             );
@@ -690,8 +920,14 @@ export function SpotsPage() {
                 },
               }}
             >
-              <Tooltip>
-                <h3>{row.brand} — {row.street}</h3>
+              <Tooltip direction="top" offset={[0, -12]}>
+                <SpotTooltip
+                  name={row.brand}
+                  street={row.street}
+                  city={row.city}
+                  score={Number.isFinite(row.avgScore) ? row.avgScore : null}
+                  hint="Click to view details"
+                />
               </Tooltip>
             </Marker>
           );
@@ -699,7 +935,7 @@ export function SpotsPage() {
         {addDraft && (
           <Marker position={addDraft} icon={addMarkerIcon}>
             <Tooltip permanent direction="top" offset={[0, -16]}>
-              <h3>New spot</h3>
+              <SpotTooltip name="New spot" hint="Click anywhere to move" />
             </Tooltip>
           </Marker>
         )}
@@ -707,6 +943,7 @@ export function SpotsPage() {
           <Marker position={userLocation} icon={userIcon} />
         )}
         <FlyTo center={flyTarget.current} />
+        <FlyToView target={recenterRef.current} />
       </MapContainer>
 
       {addMode && (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { IconMapMarker, IconPlus } from "@/components/icons";
 import { PeopleMapsLogo } from "@/components/Logo";
+import { PageMeta } from "@/components/PageMeta";
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -26,6 +27,7 @@ export default function SignupPage() {
 
   return (
     <div className="page">
+      <PageMeta title="Create profile — PeopleMaps" description="Create a free PeopleMaps profile to rate spots, save favourites and add places." noIndex />
       <div className="flex auth-layout" style={{ height: "100%" }}>
         <div className="sign-box">
           <div className="signup auth-card">

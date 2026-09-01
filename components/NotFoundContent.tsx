@@ -15,7 +15,7 @@ export function NotFoundContent() {
           Seems like the route doesn&apos;t exist or you do not have permission
           to access it!
         </h2>
-        <button className="action-btn2" onClick={() => router.push("/")}>
+        <button className="action-btn2" onClick={() => router.push("/map")}>
           Go back to the map
         </button>
       </div>

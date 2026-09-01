@@ -15,7 +15,7 @@ import {
   getAllReviews,
   getAuthorName,
 } from "./store";
-import type { Spot, Review, ReviewComment, SpotPhoto, SpotStatus, SavedEntry } from "./types";
+import type { Spot, Review, ReviewComment, SpotPhoto, SpotStatus, SavedEntry, ModerationStatus, MapDocument } from "./types";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
 // client bundle can decide which experience to render. The API route handlers
@@ -207,6 +207,69 @@ export async function unsaveSpot(spotId: string, userId: string | null): Promise
 export function authorName(user_fk: number | null | undefined | string): string {
   if (user_fk === null || user_fk === undefined) return "Anonymous";
   return getAuthorName(Number(user_fk));
+}
+
+// ---- Admin (map owners / global admins) ----
+export interface AdminMapEntry extends MapDocument {
+  spotTotal: number;
+  spotPending: number;
+  spotHidden: number;
+}
+
+export interface AdminMapsResponse {
+  maps: AdminMapEntry[];
+  owned: AdminMapEntry[];
+  isAdmin: boolean;
+}
+
+export async function fetchAdminMaps(): Promise<AdminMapsResponse> {
+  if (!backendLive) return { maps: [], owned: [], isAdmin: false };
+  return req<AdminMapsResponse>("/api/admin/maps");
+}
+
+export interface AdminSpotList {
+  spots: Spot[];
+  pending: number;
+  hidden: number;
+  total: number;
+}
+
+export async function fetchAdminSpots(mapId: string): Promise<AdminSpotList | null> {
+  if (!backendLive) return null;
+  return req<AdminSpotList>(`/api/admin/spots?mapId=${encodeURIComponent(mapId)}`);
+}
+
+export async function moderateSpot(
+  spotId: string,
+  moderation: ModerationStatus
+): Promise<void> {
+  await req("/api/admin/spots", {
+    method: "PATCH",
+    body: JSON.stringify({ spotId, moderation }),
+  });
+}
+
+export async function setSpotHidden(spotId: string, hidden: boolean): Promise<void> {
+  await req("/api/admin/spots", {
+    method: "PATCH",
+    body: JSON.stringify({ spotId, hidden }),
+  });
+}
+
+export async function updateSpotFields(
+  spotId: string,
+  fields: Partial<Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status">>
+): Promise<void> {
+  await req("/api/admin/spots", {
+    method: "PATCH",
+    body: JSON.stringify({ spotId, fields }),
+  });
+}
+
+export async function destroySpot(spotId: string): Promise<void> {
+  await req(`/api/admin/spots?spotId=${encodeURIComponent(spotId)}`, {
+    method: "DELETE",
+  });
 }
 
 // Convenience: author display for a Mongo spot (ownerName not stored on spot)

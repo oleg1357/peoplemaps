@@ -19,7 +19,16 @@ export async function GET(req: Request) {
       return spot ? json(spot) : error("Spot not found", 404);
     }
     if (!mapId) return error("Missing mapId");
-    const spots = await col.find({ mapId }).sort({ createdAt: -1 }).toArray();
+    // Public map only shows spots that have been approved (or predate moderation)
+    // and are not hidden. Pending and rejected spots are hidden from the public map.
+    const spots = await col
+      .find({
+        mapId,
+        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+        hidden: { $ne: true },
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
     return json(spots);
   });
 }
@@ -40,6 +49,10 @@ export async function POST(req: Request) {
     lng: Number(body.lng),
     createdBy: body.createdBy ?? null,
     createdAt: new Date().toISOString(),
+    // Public submissions are queued for a map owner to approve.
+    moderation: "pending",
+    hidden: false,
+    reviewNote: null,
   };
   return withDb(async (db) => {
     const col = db.collection<Spot>(COLLECTIONS.spots);
@@ -58,6 +71,9 @@ export async function DELETE(req: Request) {
     await db.collection(COLLECTIONS.spots).deleteOne({ _id: oid });
     await db.collection(COLLECTIONS.reviews).deleteMany({ spotId });
     await db.collection(COLLECTIONS.photos).deleteMany({ spotId });
+    await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
+    await db.collection(COLLECTIONS.votes).deleteMany({ spotId });
+    await db.collection(COLLECTIONS.saved).deleteMany({ spotId });
     return NextResponse.json({ ok: true });
   });
 }

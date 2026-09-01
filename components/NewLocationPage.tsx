@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import {
   getAllPlaceMarkers,
   addNewLocation,
@@ -15,21 +14,12 @@ import { useAuth } from "@/lib/AuthContext";
 import { tileLayer } from "@/lib/tiles";
 import { Rating } from "./Rating";
 import { IconCheck, IconMapMarker } from "./icons";
+import { SpotTooltip } from "./SpotTooltip";
 
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
 
-const placeIcon = L.icon({
-  iconUrl: "https://i.ibb.co/Jp8FCPC/pin-4.png",
-  iconSize: [40, 40],
-  iconAnchor: [30, 30],
-});
-
-const markerIcon = L.icon({
-  iconUrl: "https://i.ibb.co/hL2mS5V/pin-3.png",
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-});
+import { placeIcon, markerIcon } from "@/lib/icons";
 
 function MapClickHandler({ onClick }: { onClick: (e: L.LeafletMouseEvent) => void }) {
   useMapEvents({
@@ -97,7 +87,12 @@ function PlacesMap() {
         zoomSnap={0.5}
         style={{ height: "100%", width: "100%" }}
       >
-        <TileLayer attribution={tiles.attribution} url={tiles.url} />
+        <TileLayer
+          attribution={tiles.attribution}
+          url={tiles.url}
+          subdomains={tiles.subdomains}
+          maxZoom={tiles.maxZoom}
+        />
         {places.map((s) => (
           <Marker
             key={s.id}
@@ -105,10 +100,13 @@ function PlacesMap() {
             icon={placeIcon}
             eventHandlers={{ click: () => setPicked(s) }}
           >
-            <Tooltip>
-              <div>
-                {s.brand} address: {s.street}
-              </div>
+            <Tooltip direction="top" offset={[0, -12]}>
+              <SpotTooltip
+                name={s.brand}
+                street={s.street}
+                city={s.city}
+                hint="Click to add review"
+              />
             </Tooltip>
           </Marker>
         ))}
@@ -303,11 +301,19 @@ function NewLocationMap() {
         style={{ height: "100%", width: "100%" }}
       >
         <MapClickHandler onClick={addMarker} />
-        <TileLayer attribution={tiles.attribution} url={tiles.url} />
+        <TileLayer
+          attribution={tiles.attribution}
+          url={tiles.url}
+          subdomains={tiles.subdomains}
+          maxZoom={tiles.maxZoom}
+        />
         {marker !== null && (
           <Marker position={marker} icon={markerIcon}>
             <Tooltip permanent direction="top" offset={[0, -16]}>
-              <h3>{success ? "Location added!" : "New spot"}</h3>
+              <SpotTooltip
+                name={success ? "Location added!" : "New spot"}
+                hint="Click anywhere to move"
+              />
             </Tooltip>
           </Marker>
         )}

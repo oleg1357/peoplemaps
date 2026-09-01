@@ -2,6 +2,11 @@
 
 export type SpotStatus = "open" | "closed" | "unknown";
 
+// Moderation state of a spot. New spots start as "pending" and must be
+// approved (or rejected) by a map owner (or global admin) before they are
+// visible on the public map.
+export type ModerationStatus = "pending" | "approved" | "rejected";
+
 // A single point/spot on a user's map. Belongs to a Sanity map document via mapId.
 export interface Spot {
   _id?: string;
@@ -15,6 +20,12 @@ export interface Spot {
   createdBy?: string | null; // supabase user id
   createdAt: string;
   status?: SpotStatus;
+  // Moderation / admin fields
+  moderation?: ModerationStatus;
+  hidden?: boolean;
+  reviewedBy?: string | null; // supabase user id of the reviewer
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
 }
 
 export interface Review {

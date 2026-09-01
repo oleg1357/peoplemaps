@@ -83,6 +83,7 @@ export function getSpotMarkers(userId: string | null): SpotMarker[] {
       date: "",
       is_saved: savedEntry ? 1 : null,
       note: savedEntry?.note,
+      category: s.category,
     };
   });
 }
@@ -99,6 +100,7 @@ export function getAllPlaceMarkers(): SpotMarker[] {
     avgScore: 0,
     date: "",
     is_saved: null,
+    category: s.category,
   }));
 }
 
@@ -187,6 +189,7 @@ export function getSavedSpots(userId: string | null): SavedSpot[] {
       zip: s?.zip ?? 0,
       note: e.note,
       avgScore: avg,
+      category: s?.category ?? "other",
     };
   });
 }
@@ -257,6 +260,7 @@ export function addNewLocation(
     city: input.city,
     street: input.address,
     zip: input.zip,
+    category: "other",
   });
   savePlaces(places);
 

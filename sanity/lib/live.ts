@@ -1,5 +1,5 @@
-import { defineLive } from "next-sanity";
-import { client, sanityConfigured, serverClient } from "./client";
+import { defineLive } from "next-sanity/live";
+import { client, sanityConfigured } from "./client";
 
 export const { sanityFetch, SanityLive } = sanityConfigured
   ? defineLive({

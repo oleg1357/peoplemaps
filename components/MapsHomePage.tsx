@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useMapData } from "@/lib/MapContext";
-import { tileLayer } from "@/lib/tiles";
+import { tileLayer, MAP_STYLES } from "@/lib/tiles";
+import type { MapStyle } from "@/lib/tiles";
 import type { Spot, SpotStatus } from "@/lib/types";
 import {
   fetchReviews,
@@ -33,24 +33,49 @@ import type { Review, ReviewComment, SpotPhoto } from "@/lib/types";
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
 
-const spotIcon = L.icon({
-  iconUrl: "https://i.ibb.co/hL2mS5V/pin-3.png",
-  iconSize: [40, 40],
-  iconAnchor: [30, 30],
-});
-
-const draftIcon = L.divIcon({
-  className: "cluster-icon",
-  html: '<div style="width:22px;height:22px;border-radius:50%;background:#f0ad00;border:3px solid #fff"></div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-});
+import { spotIcon, userIcon, draftIcon } from "@/lib/icons";
+import { SpotTooltip } from "./SpotTooltip";
+import { IconLink, IconMapMarker } from "./icons";
 
 function FlyTo({ center }: { center: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
     if (center) map.flyTo(center, Math.max(map.getZoom(), 15));
   }, [center, map]);
+  return null;
+}
+
+function ViewWatcher({
+  onMove,
+}: {
+  onMove: (center: [number, number], zoom: number) => void;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const report = () => {
+      const c = map.getCenter();
+      onMove([c.lat, c.lng], map.getZoom());
+    };
+    map.on("zoomend", report);
+    map.on("moveend", report);
+    report();
+    return () => {
+      map.off("zoomend", report);
+      map.off("moveend", report);
+    };
+  }, [map, onMove]);
+  return null;
+}
+
+function FlyToView({
+  target,
+}: {
+  target: { center: [number, number]; zoom: number } | null;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.flyTo(target.center, target.zoom, { duration: 1.2 });
+  }, [target, map]);
   return null;
 }
 
@@ -61,10 +86,24 @@ interface DetailBundle {
 
 export function MapsHomePage() {
   const { theme } = useTheme();
-  const tiles = tileLayer(theme);
+  const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
+  const tiles = tileLayer(theme, mapStyle);
   const { userId } = useAuth();
   const { maps, activeMap, selectMap, spots, spotsLoading, reloadSpots } =
     useMapData();
+  const [mapCenter, setMapCenter] = useState<[number, number]>(CENTER);
+  const [mapZoom, setMapZoom] = useState(ZOOM);
+  const onMapMove = useCallback((c: [number, number], z: number) => {
+    setMapCenter(c);
+    setMapZoom(z);
+  }, []);
+  const [viewCopied, setViewCopied] = useState(false);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(
+    null
+  );
+  const viewTargetRef = useRef<{ center: [number, number]; zoom: number } | null>(
+    null
+  );
 
   const [selected, setSelected] = useState<Spot | null>(null);
   const [bundle, setBundle] = useState<DetailBundle | null>(null);
@@ -208,6 +247,35 @@ export function MapsHomePage() {
     reloadSpots();
   };
 
+  const copyViewLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/?lat=${mapCenter[0].toFixed(5)}&lng=${mapCenter[
+          1
+        ].toFixed(5)}&zoom=${mapZoom}`
+      );
+      setViewCopied(true);
+      setTimeout(() => setViewCopied(false), 2000);
+    } catch {
+      setViewCopied(false);
+    }
+  };
+
+  const centerOnMe = () => {
+    const set = (c: [number, number]) => {
+      setUserLocation(c);
+      viewTargetRef.current = { center: c, zoom: 15 };
+    };
+    if (userLocation) {
+      set(userLocation);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => set([pos.coords.latitude, pos.coords.longitude]),
+        () => {}
+      );
+    }
+  };
+
   return (
     <div className="map-container">
       {maps.length > 0 && (
@@ -234,6 +302,39 @@ export function MapsHomePage() {
       >
         {adding ? "Cancel" : "Add spot"}
       </button>
+
+      <div id="map-controls">
+        <select
+          id="map-style-select"
+          className="places-select"
+          value={mapStyle}
+          onChange={(e) => setMapStyle(e.target.value as MapStyle)}
+          title="Map style"
+        >
+          {MAP_STYLES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="map-ctrl-btn"
+          onClick={centerOnMe}
+          title="Center on my location"
+        >
+          <IconMapMarker size={16} /> Near me
+        </button>
+        <button
+          type="button"
+          className="map-ctrl-btn"
+          onClick={copyViewLink}
+          title="Copy link to this map view"
+        >
+          <IconLink size={16} />
+          {viewCopied ? "Copied!" : "Share view"}
+        </button>
+      </div>
 
       {selected && bundle && (
         <div id="details">
@@ -398,7 +499,12 @@ export function MapsHomePage() {
       )}
 
       <MapContainer center={CENTER} zoom={ZOOM} zoomSnap={0.5} style={{ height: "100%", width: "100%" }}>
-        <TileLayer attribution={tiles.attribution} url={tiles.url} />
+        <TileLayer
+          attribution={tiles.attribution}
+          url={tiles.url}
+          subdomains={tiles.subdomains}
+          maxZoom={tiles.maxZoom}
+        />
         {adding && (
           <MapClickHandler onPlace={(p) => setDraft(p)} />
         )}
@@ -409,19 +515,30 @@ export function MapsHomePage() {
             icon={spotIcon}
             eventHandlers={{ click: () => openSpot(s) }}
           >
-            <Tooltip>
-              <h3>{s.name}</h3>
+            <Tooltip direction="top" offset={[0, -12]}>
+              <SpotTooltip
+                name={s.name}
+                street={s.street}
+                city={s.city}
+                status={s.status}
+                hint="Click to view details"
+              />
             </Tooltip>
           </Marker>
         ))}
         {draft && (
           <Marker position={draft} icon={draftIcon}>
             <Tooltip permanent direction="top" offset={[0, -16]}>
-              <h3>New spot</h3>
+              <SpotTooltip name="New spot" hint="Click anywhere to move" />
             </Tooltip>
           </Marker>
         )}
+        {userLocation && !adding && (
+          <Marker position={userLocation} icon={userIcon} />
+        )}
+        <ViewWatcher onMove={onMapMove} />
         <FlyTo center={flyTargetRef.current} />
+        <FlyToView target={viewTargetRef.current} />
       </MapContainer>
 
       {adding && (

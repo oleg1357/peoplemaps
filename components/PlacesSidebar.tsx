@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { SpotMarker } from "@/lib/data";
+import { SPOT_CATEGORIES, CATEGORY_LABELS } from "@/lib/data";
+import type { SpotCategory } from "@/lib/data";
 import { getAllSpotStatuses, getLatestReviewDate } from "@/lib/store";
 import type { SpotStatus } from "@/lib/store";
 import { Rating } from "./Rating";
@@ -53,6 +55,7 @@ export function PlacesSidebar({
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"all" | "recent" | "near">("all");
   const [city, setCity] = useState<string>("all");
+  const [category, setCategory] = useState<"all" | SpotCategory>("all");
 
   const cities = useMemo(
     () => Array.from(new Set(markers.map((m) => m.city))).sort(),
@@ -84,6 +87,9 @@ export function PlacesSidebar({
     if (city !== "all") {
       filtered = filtered.filter((r) => r.marker.city === city);
     }
+    if (category !== "all") {
+      filtered = filtered.filter((r) => r.marker.category === category);
+    }
 
     if (sort === "recent") {
       return filtered.sort((a, b) => {
@@ -104,7 +110,7 @@ export function PlacesSidebar({
         `${b.marker.brand} ${b.marker.city}`
       )
     );
-  }, [markers, query, sort, city, userLocation]);
+  }, [markers, query, sort, city, category, userLocation]);
 
   const select = (m: SpotMarker) => {
     onSelect(m);
@@ -139,6 +145,18 @@ export function PlacesSidebar({
             {cities.map((c) => (
               <option key={c} value={c}>
                 {c}
+              </option>
+            ))}
+          </select>
+          <select
+            className="places-select"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as "all" | SpotCategory)}
+          >
+            <option value="all">All categories</option>
+            {SPOT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABELS[c]}
               </option>
             ))}
           </select>

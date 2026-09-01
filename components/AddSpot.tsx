@@ -2,16 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMapEvents } from "react-leaflet";
-import L from "leaflet";
 import { addNewLocation } from "@/lib/store";
 import { Rating } from "./Rating";
 import { IconCheck, IconMapMarker } from "./icons";
-
-export const addMarkerIcon = L.icon({
-  iconUrl: "https://i.ibb.co/hL2mS5V/pin-3.png",
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-});
+export { addMarkerIcon } from "@/lib/icons";
 
 export function AddSpotMapHandler({
   enabled,

@@ -20,13 +20,13 @@ export function Nav() {
   if (mobile) {
     return (
       <div id="navMobile">
-        <Link href="/about">
+        <Link href="/">
           <IconHome size={32} />
         </Link>
-        <Link id="map-link" href="/">
+        <Link id="map-link" href="/map">
           <IconMapMarker size={32} />
         </Link>
-        <Link href="/?add=1">
+        <Link href="/map?add=1">
           <IconPlus size={32} />
         </Link>
         {user ? (
@@ -46,14 +46,19 @@ export function Nav() {
   return (
     <div id="nav">
       <div className="logo flex">
-        <PeopleMapsLogo size={30} />
-        <h3 id="logo-text">PeopleMaps</h3>
+        <Link href="/" className="logo-link">
+          <PeopleMapsLogo size={30} />
+          <h3 id="logo-text">PeopleMaps</h3>
+        </Link>
       </div>
       <nav className="nav-links">
-        <Link id="map-link" href="/" className={pathname === "/" ? "active" : ""}>
+        <Link href="/" className={pathname === "/" ? "active" : ""}>
+          Home
+        </Link>
+        <Link id="map-link" href="/map" className={pathname === "/map" ? "active" : ""}>
           Maps
         </Link>
-        <Link href="/?add=1">
+        <Link href="/map?add=1">
           + Add spot
         </Link>
         <Link href="/about" className={pathname === "/about" ? "active" : ""}>
@@ -63,6 +68,9 @@ export function Nav() {
           <>
             <Link href="/profile" className={pathname === "/profile" ? "active" : ""}>
               Profile
+            </Link>
+            <Link href="/admin" className={pathname === "/admin" ? "active" : ""}>
+              Admin
             </Link>
             <a id="log-out" onClick={(e) => { e.preventDefault(); logout(); }}>
               Log out
