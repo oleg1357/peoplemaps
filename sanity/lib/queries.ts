@@ -1,5 +1,14 @@
 import { defineQuery } from "next-sanity";
 
+export const MAP_FIELDS = `,
+  accentColor,
+  defaultMarker,
+  defaultMarkerColor,
+  welcomeMessage,
+  submissionNote,
+  maxPhotosPerSpot,
+  requireApproval`;
+
 export const MAP_BY_ID_QUERY = defineQuery(`
   *[_id == $id][0]{
     _id,
@@ -12,6 +21,7 @@ export const MAP_BY_ID_QUERY = defineQuery(`
     isPublic,
     baseCenter,
     baseZoom
+    ${MAP_FIELDS}
   }
 `);
 
@@ -27,6 +37,7 @@ export const MAPS_BY_OWNER_QUERY = defineQuery(`
     isPublic,
     baseCenter,
     baseZoom
+    ${MAP_FIELDS}
   }
 `);
 
@@ -42,6 +53,7 @@ export const PUBLIC_MAPS_QUERY = defineQuery(`
     isPublic,
     baseCenter,
     baseZoom
+    ${MAP_FIELDS}
   }
 `);
 
@@ -57,5 +69,6 @@ export const ALL_MAPS_QUERY = defineQuery(`
     isPublic,
     baseCenter,
     baseZoom
+    ${MAP_FIELDS}
   }
 `);

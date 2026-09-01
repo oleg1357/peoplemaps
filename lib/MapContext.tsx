@@ -25,6 +25,7 @@ interface MapContextValue {
   mapsLoading: boolean;
   activeMap: MapDocument | null;
   selectMap: (id: string | null) => void;
+  registerMap: (map: MapDocument) => void;
   mapData: MapData;
   spots: Spot[];
   spotsLoading: boolean;
@@ -41,15 +42,24 @@ const EMPTY_DATA: MapData = {
   reviews: [],
   comments: [],
   photos: [],
-  watches: [],
-  saved: [],
 };
 
 export function MapProvider({ children }: { children: ReactNode }) {
-  const { maps, loading: mapsLoading } = useMaps();
+  const { maps: publicMaps, loading: mapsLoading } = useMaps();
+  // A map seeded from a permalink page (`/map/[slug]`) — kept out of the public
+  // fetch so private/just-created maps are still selectable.
+  const [seededMap, setSeededMap] = useState<MapDocument | null>(null);
   const [activeMapId, setActiveMapId] = useState<string | null>(null);
   const [mapData, setMapData] = useState<MapData>(EMPTY_DATA);
   const [spotsLoading, setSpotsLoading] = useState(false);
+
+  const maps = useMemo(
+    () =>
+      seededMap
+        ? [seededMap, ...publicMaps.filter((m) => m._id !== seededMap._id)]
+        : publicMaps,
+    [seededMap, publicMaps]
+  );
 
   const activeMap =
     maps.find((m) => m._id === activeMapId) ?? maps[0] ?? null;
@@ -84,6 +94,13 @@ export function MapProvider({ children }: { children: ReactNode }) {
     setActiveMapId(id);
   }, []);
 
+  // Seeds a map (used by permalink/`/map/[slug]` pages so a private or
+  // just-created map is selectable). Dedupes against the public list.
+  const registerMap = useCallback((map: MapDocument) => {
+    setActiveMapId(map._id);
+    setSeededMap(map);
+  }, []);
+
   // Local, request-free updates after a mutation (review added, status set, …).
   const patchMapData = useCallback((fn: (d: MapData) => MapData) => {
     setMapData((prev) => fn(prev));
@@ -115,8 +132,6 @@ export function MapProvider({ children }: { children: ReactNode }) {
             (c) => !spotReviewIds.includes(c.reviewId)
           ),
           photos: prev.photos.filter((p) => p.spotId !== spotId),
-          watches: prev.watches.filter((w) => String(w.spotId) !== String(spotId)),
-          saved: prev.saved.filter((e) => String(e.spotId) !== String(spotId)),
         };
       });
     } catch {
@@ -131,6 +146,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
       mapsLoading,
       activeMap,
       selectMap,
+      registerMap,
       mapData,
       spots: mapData.spots,
       spotsLoading,
@@ -139,7 +155,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
       addSpot,
       removeSpot,
     }),
-    [maps, mapsLoading, activeMap, selectMap, mapData, spotsLoading, reloadMapData, patchMapData, addSpot, removeSpot]
+    [maps, mapsLoading, activeMap, selectMap, registerMap, mapData, spotsLoading, reloadMapData, patchMapData, addSpot, removeSpot]
   );
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;

@@ -20,6 +20,9 @@ export interface Spot {
   createdBy?: string | null; // supabase user id
   createdAt: string;
   status?: SpotStatus;
+  // Marker look (emoji + color). Falls back to the map's defaults when unset.
+  marker?: string | null;
+  markerColor?: string | null;
   // Moderation / admin fields
   moderation?: ModerationStatus;
   hidden?: boolean;
@@ -40,8 +43,11 @@ export interface Review {
 export interface ReviewComment {
   _id?: string;
   reviewId: string;
-  user_fk?: string | null;
+  user_fk?: string | null; // supabase user id
   authorName?: string;
+  // Reply to another comment on the same review. `undefined`/null = direct
+  // reply to the review itself.
+  parentId?: string | null;
   text: string;
   date: string;
 }
@@ -60,17 +66,16 @@ export interface ReviewVote {
   userId: string;
 }
 
-export interface SavedEntry {
+// A designated moderator of a map. One document per (mapId, userId) pair.
+// Moderators can review/edit/destroy spots but cannot change map settings,
+// manage other moderators, or delete the map itself.
+export interface MapRole {
   _id?: string;
-  userId: string;
-  spotId: string;
-  note: string;
-}
-
-export interface WatchEntry {
-  _id?: string;
-  userId: string;
-  spotId: string;
+  mapId: string; // Sanity map document _id
+  userId: string; // Supabase user id of the moderator
+  displayName?: string; // human-readable name captured at assignment time
+  addedBy: string; // Supabase user id of the owner who assigned them
+  addedAt: string; // ISO timestamp
 }
 
 // Sanity map document (the user-created map; points live in Mongo).
@@ -78,11 +83,107 @@ export interface MapDocument {
   _id: string;
   _createdAt?: string;
   title: string;
-  slug?: { current: string } | null;
+  // Unwrapped from Sanity's slug type (`slug.current`) by all queries.
+  slug?: string | null;
   description?: string;
   ownerId?: string; // supabase user id of the map creator
   ownerName?: string;
   isPublic?: boolean;
   baseCenter?: { lat: number; lng: number };
   baseZoom?: number;
+  // Map-owner settings
+  accentColor?: string | null;
+  defaultMarker?: string | null;
+  defaultMarkerColor?: string | null;
+  welcomeMessage?: string | null;
+  submissionNote?: string | null;
+  maxPhotosPerSpot?: number | null;
+  requireApproval?: boolean | null;
+}
+
+// ---- Profile / "my contributions" (served by GET /api/me) ----
+
+export interface ProfileUser {
+  id: string;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  initials: string;
+  memberSince: string | null; // ISO date
+}
+
+export interface ProfileStats {
+  spots: number;
+  reviews: number;
+  comments: number;
+  photos: number;
+  votes: number;
+  helpfulReceived: number;
+  mapsOwned: number;
+}
+
+export interface OwnedMapSummary {
+  _id: string;
+  title: string;
+  slug: string | null;
+  accentColor: string | null;
+  spotCount: number;
+}
+
+export interface ProfileSpotContribution {
+  _id: string;
+  mapId: string;
+  mapTitle: string;
+  mapSlug: string | null;
+  name: string;
+  city: string;
+  status?: SpotStatus;
+  moderation?: ModerationStatus;
+  marker?: string | null;
+  markerColor?: string | null;
+  createdAt: string;
+}
+
+export interface ProfileReviewContribution {
+  _id: string;
+  spotId: string;
+  spotName: string;
+  mapId: string;
+  mapTitle: string;
+  mapSlug: string | null;
+  score: number;
+  review: string;
+  date: string;
+}
+
+export interface ProfileCommentContribution {
+  _id: string;
+  spotId: string;
+  spotName: string;
+  reviewText: string;
+  text: string;
+  date: string;
+}
+
+export interface ProfilePhotoContribution {
+  _id: string;
+  spotId: string;
+  spotName: string;
+  mapId: string;
+  mapSlug: string | null;
+  dataUrl: string;
+  date: string;
+}
+
+export interface ProfileData {
+  user: ProfileUser;
+  stats: ProfileStats;
+  maps: OwnedMapSummary[];
+  contributions: {
+    spots: ProfileSpotContribution[];
+    reviews: ProfileReviewContribution[];
+    comments: ProfileCommentContribution[];
+    photos: ProfilePhotoContribution[];
+  };
 }

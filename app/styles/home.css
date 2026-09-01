@@ -1,0 +1,252 @@
+/* --- PeopleMaps styles: home (extracted from app/globals.css) --- */
+/* ---------- Home (landing) ---------- */
+.home-page {
+  width: 100%;
+}
+
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 72px 24px 56px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.home-hero-logo {
+  animation: home-logo-float 4s ease-in-out infinite;
+  margin-bottom: 24px;
+}
+
+@keyframes home-logo-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.home-hero-title {
+  font-size: 2.6em;
+  line-height: 1.15;
+  margin: 0 0 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.home-hero-sub {
+  font-size: 1.15em;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 600px;
+  margin: 0 0 32px;
+}
+
+.home-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.home-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  padding: 13px 24px;
+}
+
+.home-hero-actions .action-btn2 {
+  font-size: 16px;
+  padding: 12px 24px;
+}
+
+.home-maps {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 24px 64px;
+}
+
+.home-section-title {
+  font-size: 1.9em;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.home-section-sub {
+  text-align: center;
+  margin: 0 0 32px;
+  font-size: 1.05em;
+}
+
+.home-maps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.home-map-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.home-map-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.home-map-card-accent {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-map-card-body {
+  padding: 16px 18px 12px;
+}
+
+.home-map-card-body h3 {
+  margin: 0 0 8px;
+  font-size: 1.2em;
+  color: var(--ink);
+}
+
+.home-map-card-desc {
+  margin: 0 0 16px;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.home-map-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-map-card-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.home-map-card-open {
+  margin-top: auto;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green-dark);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  transition: background 0.15s ease;
+}
+
+.home-map-card:hover .home-map-card-open {
+  background: rgba(97, 198, 122, 0.1);
+}
+
+.home-cta {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px 24px 72px;
+}
+
+.home-cta-inner {
+  background-image: linear-gradient(135deg, var(--green-dark), var(--green-light));
+  border-radius: var(--radius-lg);
+  padding: 48px 32px;
+  text-align: center;
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+}
+
+.home-cta-inner h2 {
+  margin: 0 0 12px;
+  font-size: 1.8em;
+}
+
+.home-cta-inner p {
+  margin: 0 auto 24px;
+  max-width: 520px;
+  font-size: 1.05em;
+  opacity: 0.95;
+}
+
+.home-cta-btn {
+  background: #fff;
+  color: var(--green-dark);
+  font-size: 16px;
+  padding: 13px 26px;
+  box-shadow: none;
+}
+
+.home-cta-btn:hover {
+  filter: brightness(0.97);
+}
+
+@media only screen and (min-device-width: 320px) and (max-device-width: 480px) {
+  .home-hero {
+    padding: 48px 20px 40px;
+  }
+
+  .home-hero-logo svg {
+    width: 110px;
+    height: 110px;
+  }
+
+  .home-hero-title {
+    font-size: 1.9em;
+  }
+
+  .home-hero-sub {
+    font-size: 1.02em;
+  }
+
+  .home-hero-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .home-hero-actions .action-btn,
+  .home-hero-actions .action-btn2 {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .home-maps {
+    padding: 16px 16px 48px;
+  }
+
+  .home-maps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-section-title {
+    font-size: 1.6em;
+  }
+
+  .home-cta {
+    padding: 8px 16px 88px;
+  }
+
+  .home-cta-inner {
+    padding: 36px 20px;
+  }
+}
+

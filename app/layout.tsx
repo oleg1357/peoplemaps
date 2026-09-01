@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import "./globals.css";
+import "./styles/base.css";
+import "./styles/nav.css";
+import "./styles/components.css";
+import "./styles/map.css";
+import "./styles/responsive.css";
+import "./styles/home.css";
+import "./styles/admin.css";
+import "./styles/profile.css";
 import "leaflet/dist/leaflet.css";
 import { AppProviders } from "@/lib/AppProviders";
 import { SiteLayout } from "@/components/SiteLayout";

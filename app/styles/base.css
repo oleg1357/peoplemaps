@@ -1,0 +1,131 @@
+/* --- PeopleMaps styles: base (extracted from app/globals.css) --- */
+:root {
+  --green: #61c67a;
+  --green-light: #7af482;
+  --green-dark: #3fae5c;
+  --ink: #131b23;
+  --muted: #6b7280;
+  --surface: #ffffff;
+  --surface-2: #fafbfb;
+  --chip: #f4f6f5;
+  --bg: #f5f7f6;
+  --border: #e6e9e7;
+  --shadow-sm: 0 1px 2px rgba(19, 27, 35, 0.06), 0 1px 3px rgba(19, 27, 35, 0.08);
+  --shadow-md: 0 6px 16px rgba(19, 27, 35, 0.1);
+  --shadow-lg: 0 12px 32px rgba(19, 27, 35, 0.16);
+  --glass: rgba(255, 255, 255, 0.86);
+  --glass-solid: rgba(255, 255, 255, 0.94);
+  --radius: 0;
+  --radius-lg: 0;
+  --header-h: 60px;
+  --font: "Avenir", "Helvetica Neue", Arial, sans-serif;
+  --success: #2f9d52;
+  --success-bg: rgba(97, 198, 122, 0.16);
+  --warning: #b8860b;
+  --warning-bg: rgba(240, 173, 0, 0.15);
+  --danger: #d6453d;
+  --danger-dark: #b93a33;
+  --danger-bg: rgba(214, 69, 61, 0.14);
+  --danger-bg-soft: rgba(232, 121, 111, 0.16);
+  --danger-2: #e05a5a;
+  --info: #4bb0e8;
+  --error: #b3261e;
+  --error-bg: #fdecea;
+  --error-border: #f5c6c2;
+}
+
+[data-theme="dark"] {
+  --ink: #e6ece9;
+  --muted: #96a19a;
+  --surface: #1b221f;
+  --surface-2: #232b27;
+  --chip: #26302b;
+  --bg: #12171a;
+  --border: #2d3731;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --glass: rgba(27, 34, 31, 0.85);
+  --glass-solid: rgba(27, 34, 31, 0.96);
+  --warning: #e3b54f;
+  --error: #f28b82;
+  --error-bg: rgba(214, 69, 61, 0.18);
+  --error-border: rgba(214, 69, 61, 0.45);
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.app-root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ---------- Layout ---------- */
+.page {
+  height: 100vh;
+  min-height: 100vh;
+  padding-top: var(--header-h);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.map-container {
+  height: calc(100vh - var(--header-h));
+  margin-top: var(--header-h);
+  width: 100%;
+  position: relative;
+}
+
+.flex {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.bold {
+  font-weight: 700;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  width: 100%;
+  color: var(--muted);
+  padding: 2em 0;
+}
+

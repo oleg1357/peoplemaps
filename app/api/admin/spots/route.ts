@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
 import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
 import type { Spot, ModerationStatus } from "@/lib/types";
 
 // Admin-only routes for map management. Access is restricted to the owner of
@@ -32,7 +33,9 @@ export async function PATCH(req: Request) {
     spotId?: string;
     moderation?: ModerationStatus | null;
     hidden?: boolean;
-    fields?: Partial<Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status">>;
+    fields?: Partial<
+      Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status" | "marker" | "markerColor">
+    >;
   };
   if (!spotId) return error("Missing spotId");
 
@@ -75,6 +78,22 @@ export async function PATCH(req: Request) {
       if (fields.lat !== undefined) set.lat = Number(fields.lat);
       if (fields.lng !== undefined) set.lng = Number(fields.lng);
       if (fields.status !== undefined) set.status = fields.status;
+      if (fields.marker !== undefined) {
+        const marker = sanitizeMarkerEmoji(String(fields.marker ?? ""));
+        if (fields.marker !== null && !marker) {
+          return error("Unknown marker.");
+        }
+        set.marker = marker;
+      }
+      if (fields.markerColor !== undefined) {
+        if (
+          fields.markerColor !== null &&
+          !hasValidColor(String(fields.markerColor))
+        ) {
+          return error("Invalid marker color.");
+        }
+        set.markerColor = fields.markerColor;
+      }
     }
 
     if (Object.keys(set).length === 0) return error("Nothing to update");
@@ -103,12 +122,11 @@ export async function DELETE(req: Request) {
     const perm = await canModerateMap(ctx, existing.mapId);
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
-    await col.deleteOne(byIdFilter<Spot>(oid));
+await col.deleteOne(byIdFilter<Spot>(oid));
     await db.collection(COLLECTIONS.reviews).deleteMany({ spotId });
     await db.collection(COLLECTIONS.photos).deleteMany({ spotId });
     await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
     await db.collection(COLLECTIONS.votes).deleteMany({ spotId });
-    await db.collection(COLLECTIONS.saved).deleteMany({ spotId });
     return NextResponse.json({ ok: true });
   });
 }

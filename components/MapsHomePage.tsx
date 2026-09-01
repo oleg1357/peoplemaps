@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useTheme } from "@/lib/ThemeContext";
@@ -16,9 +17,8 @@ import {
   setStatus,
   toggleHelpfulReview,
   addComment,
+  deleteComment,
   addSpotPhoto,
-  toggleWatchApi,
-  toggleSaveApi,
 } from "@/lib/api-client";
 import type { Review, ReviewComment, SpotPhoto } from "@/lib/types";
 import type { MapData } from "@/lib/api-client";
@@ -26,9 +26,27 @@ import type { MapData } from "@/lib/api-client";
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
 
-import { spotIcon, userIcon, draftIcon } from "@/lib/icons";
+import { userIcon } from "@/lib/icons";
+import {
+  MARKER_PRESETS,
+  DEFAULT_MARKER,
+  getMarkerColor,
+  resolveMarker,
+  makeMarkerDivIcon,
+} from "@/lib/markers";
 import { SpotTooltip } from "./SpotTooltip";
 import { IconLink, IconMapMarker } from "./icons";
+
+const markerIconCache = new Map<string, L.Icon | L.DivIcon>();
+function spotIconFor(emoji: string, color: string): L.Icon | L.DivIcon {
+  const key = `${emoji}:${color}`;
+  let icon = markerIconCache.get(key);
+  if (!icon) {
+    icon = makeMarkerDivIcon(emoji, color);
+    markerIconCache.set(key, icon);
+  }
+  return icon;
+}
 
 function FlyTo({ center }: { center: [number, number] | null }) {
   const map = useMap();
@@ -77,20 +95,30 @@ interface DetailBundle {
   photos: SpotPhoto[];
 }
 
-export function MapsHomePage() {
+export function MapsHomePage({
+  initialCenter,
+  initialZoom,
+}: {
+  initialCenter?: [number, number];
+  initialZoom?: number;
+}) {
   const { theme } = useTheme();
   const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
   const tiles = tileLayer(theme, mapStyle);
-  const { userId } = useAuth();
+  const { userId, user } = useAuth();
   const { maps, activeMap, selectMap, spots, spotsLoading, addSpot, mapData, patchMapData } =
     useMapData();
-  const [mapCenter, setMapCenter] = useState<[number, number]>(CENTER);
-  const [mapZoom, setMapZoom] = useState(ZOOM);
+  const router = useRouter();
+  const [mapCenter, setMapCenter] = useState<[number, number]>(
+    initialCenter ?? CENTER
+  );
+  const [mapZoom, setMapZoom] = useState(initialZoom ?? ZOOM);
   const onMapMove = useCallback((c: [number, number], z: number) => {
     setMapCenter(c);
     setMapZoom(z);
   }, []);
   const [viewCopied, setViewCopied] = useState(false);
+  const [mapLinkCopied, setMapLinkCopied] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(
     null
   );
@@ -101,16 +129,30 @@ export function MapsHomePage() {
   const [selected, setSelected] = useState<Spot | null>(null);
   const [bundle, setBundle] = useState<DetailBundle | null>(null);
   const [status, setStatusState] = useState<SpotStatus>("unknown");
-  const [watching, setWatching] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [reviewText, setReviewText] = useState("");
   const [reviewScore, setReviewScore] = useState(3);
+  // Reply drafts are keyed `${reviewId}:${parentCommentId}` ("root" = reply to
+  // the review itself). replyTarget is the comment currently being replied to.
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [replyTarget, setReplyTarget] = useState<{
+    reviewId: string;
+    commentId: string | null;
+  } | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<[number, number] | null>(null);
   const [newName, setNewName] = useState("");
+  const [newMarker, setNewMarker] = useState<string | null>(null);
+  const [newMarkerColor, setNewMarkerColor] = useState<string | null>(null);
   const [addError, setAddError] = useState("");
   const flyTargetRef = useRef<[number, number] | null>(null);
+
+  const pickMarkerEmoji =
+    newMarker ?? activeMap?.defaultMarker ?? DEFAULT_MARKER.emoji;
+  const pickMarkerColor =
+    newMarkerColor ??
+    resolveMarker(activeMap?.defaultMarker).color ??
+    activeMap?.defaultMarkerColor ??
+    DEFAULT_MARKER.color;
 
   const loadBundle = (spot: Spot, data: MapData): DetailBundle => {
     const reviews = data.reviews
@@ -122,7 +164,9 @@ export function MapsHomePage() {
           .filter((c) => c.reviewId === r._id)
           .map((c) => ({
             ...c,
-            author: c.user_fk ? `User ${c.user_fk.slice(0, 6)}` : "Anonymous",
+            author:
+              c.authorName ||
+              (c.user_fk ? `User ${c.user_fk.slice(0, 6)}` : "Anonymous"),
           })),
       }));
     return {
@@ -137,18 +181,6 @@ export function MapsHomePage() {
       : null;
     setBundle(current ? loadBundle(current, mapData) : null);
     setStatusState(current?.status ?? "unknown");
-    setWatching(
-      Boolean(
-        current &&
-          mapData.watches.some((w) => String(w.spotId) === String(current._id))
-      )
-    );
-    setSaved(
-      Boolean(
-        current &&
-          mapData.saved.some((e) => String(e.spotId) === String(current._id))
-      )
-    );
   }, [selected, mapData]);
 
   const openSpot = (spot: Spot) => {
@@ -171,46 +203,6 @@ export function MapsHomePage() {
       ...d,
       spots: d.spots.map((sp) => (sp._id === selected._id ? { ...sp, status: s } : sp)),
     }));
-  };
-
-  const handleWatch = async () => {
-    if (!selected?._id || !userId) return;
-    const spotId = selected._id;
-    const now = await toggleWatchApi(spotId, userId);
-    patchMapData((d) =>
-      now
-        ? {
-            ...d,
-            watches: [
-              ...d.watches.filter((w) => String(w.spotId) !== String(spotId)),
-              { userId, spotId },
-            ],
-          }
-        : {
-            ...d,
-            watches: d.watches.filter((w) => String(w.spotId) !== String(spotId)),
-          }
-    );
-  };
-
-  const handleSave = async () => {
-    if (!selected?._id || !userId) return;
-    const spotId = selected._id;
-    const on = await toggleSaveApi(spotId, userId);
-    patchMapData((d) =>
-      on
-        ? {
-            ...d,
-            saved: [
-              ...d.saved.filter((e) => String(e.spotId) !== String(spotId)),
-              { userId, spotId, note: "" },
-            ],
-          }
-        : {
-            ...d,
-            saved: d.saved.filter((e) => String(e.spotId) !== String(spotId)),
-          }
-    );
   };
 
   const handleVote = async (reviewId: string) => {
@@ -237,12 +229,42 @@ export function MapsHomePage() {
     }));
   };
 
-  const handleComment = async (reviewId: string) => {
-    const text = commentDrafts[reviewId]?.trim();
+  const handleComment = async (reviewId: string, parentId: string | null) => {
+    const key = `${reviewId}:${parentId ?? "root"}`;
+    const text = commentDrafts[key]?.trim();
     if (!text) return;
-    const created = await addComment(reviewId, text, userId);
+    const authorName =
+      user?.firstName && user?.lastName
+        ? `${user.firstName} ${user.lastName}`.trim()
+        : user?.firstName || user?.email || undefined;
+    const created = await addComment(reviewId, text, {
+      userId,
+      parentId,
+      authorName,
+    });
     if (created) patchMapData((d) => ({ ...d, comments: [...d.comments, created] }));
-    setCommentDrafts((d) => ({ ...d, [reviewId]: "" }));
+    setCommentDrafts((d) => ({ ...d, [key]: "" }));
+    setReplyTarget(null);
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    await deleteComment(commentId);
+    patchMapData((d) => {
+      const ids = new Set<string>([commentId]);
+      // Expand the set to include every reply beneath the deleted comment.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        d.comments.forEach((c) => {
+          if (c.parentId && ids.has(c.parentId) && c._id && !ids.has(c._id)) {
+            ids.add(c._id);
+            changed = true;
+          }
+        });
+      }
+      return { ...d, comments: d.comments.filter((c) => !(c._id && ids.has(c._id))) };
+    });
+    if (replyTarget?.commentId === commentId) setReplyTarget(null);
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -266,7 +288,7 @@ export function MapsHomePage() {
     }
     if (!activeMap || !draft || !newName.trim()) return;
     try {
-      await addSpot({
+      const spot = await addSpot({
         mapId: activeMap._id,
         name: newName.trim(),
         street: "",
@@ -275,10 +297,17 @@ export function MapsHomePage() {
         lat: draft[0],
         lng: draft[1],
         createdBy: userId,
+        marker: pickMarkerEmoji,
+        markerColor: pickMarkerColor,
       });
       setNewName("");
       setAdding(false);
       setDraft(null);
+      if (spot) {
+        // The create response already carries the full spot, so the details
+        // popup opens immediately with its data — no extra request.
+        openSpot(spot);
+      }
     } catch (err) {
       setAddError(
         (err as Error).message?.includes("not-configured")
@@ -288,17 +317,39 @@ export function MapsHomePage() {
     }
   };
 
+  // Stable, shareable URL for a map. Uses the slug permalink
+// (`/map/<slug>`) and falls back to the document id for maps without one.
+  const buildPermalink = (map: { _id: string; slug?: string | null } | null, includeView: boolean) => {
+    const origin = window.location.origin;
+    const base = map
+      ? map.slug
+        ? `${origin}/map/${encodeURIComponent(map.slug)}`
+        : `${origin}/map?map=${encodeURIComponent(map._id)}`
+      : `${origin}/map`;
+    return includeView
+      ? `${base}?lat=${mapCenter[0].toFixed(5)}&lng=${mapCenter[1].toFixed(
+          5
+        )}&zoom=${mapZoom}`
+      : base;
+  };
+
   const copyViewLink = async () => {
     try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/?lat=${mapCenter[0].toFixed(5)}&lng=${mapCenter[
-          1
-        ].toFixed(5)}&zoom=${mapZoom}`
-      );
+      await navigator.clipboard.writeText(buildPermalink(activeMap, true));
       setViewCopied(true);
       setTimeout(() => setViewCopied(false), 2000);
     } catch {
       setViewCopied(false);
+    }
+  };
+
+  const copyMapLink = async () => {
+    try {
+      await navigator.clipboard.writeText(buildPermalink(activeMap, false));
+      setMapLinkCopied(true);
+      setTimeout(() => setMapLinkCopied(false), 2000);
+    } catch {
+      setMapLinkCopied(false);
     }
   };
 
@@ -323,8 +374,13 @@ export function MapsHomePage() {
         <div id="map-buttons" className="buttons" style={{ top: "calc(var(--header-h) + 6px)" }}>
           <select
             value={selected?.mapId || activeMap?._id || ""}
-            onChange={(e) => selectMap(e.target.value)}
-            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc" }}
+            onChange={(e) => {
+              const id = e.target.value;
+              const m = maps.find((x) => x._id === id);
+              selectMap(id);
+              if (m) router.replace(buildPermalink(m, true));
+            }}
+            style={{ padding: "6px 8px", borderRadius: 0, border: "1px solid var(--border)" }}
           >
             {(maps as Array<{ _id: string; title: string }>).map((m) => (
               <option key={m._id} value={m._id}>
@@ -332,6 +388,17 @@ export function MapsHomePage() {
               </option>
             ))}
           </select>
+          {activeMap && (
+            <button
+              type="button"
+              className="map-ctrl-btn"
+              onClick={copyMapLink}
+              title="Copy permanent link to this map"
+            >
+              <IconLink size={16} />
+              {mapLinkCopied ? "Copied!" : "Copy map link"}
+            </button>
+          )}
         </div>
       )}
 
@@ -356,6 +423,18 @@ export function MapsHomePage() {
       {maps.length === 0 && !adding && (
         <div id="map-note">
           No maps available yet. Create your first map from <a href="/admin">Map Admin</a>.
+        </div>
+      )}
+
+      {activeMap?.welcomeMessage && (
+        <div
+          id="map-note"
+          className="map-welcome"
+          style={{
+            borderColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
+          }}
+        >
+          {activeMap.welcomeMessage}
         </div>
       )}
 
@@ -423,22 +502,6 @@ export function MapsHomePage() {
                   </button>
                 ))}
               </div>
-              <div className="status-actions">
-                <button
-                  type="button"
-                  className={`copy-link save ${saved ? "saved" : ""}`}
-                  onClick={handleSave}
-                >
-                  {saved ? "Saved" : "Save"}
-                </button>
-                <button
-                  type="button"
-                  className={`copy-link watch ${watching ? "watching" : ""}`}
-                  onClick={handleWatch}
-                >
-                  {watching ? "Watching" : "Watch"}
-                </button>
-              </div>
             </div>
           </div>
 
@@ -484,6 +547,17 @@ export function MapsHomePage() {
                           <button
                             type="button"
                             className="link-btn"
+                            onClick={() =>
+                              setReplyTarget({ reviewId: r._id as string, commentId: null })
+                            }
+                          >
+                            Reply
+                          </button>
+                        )}
+                        {r._id && (
+                          <button
+                            type="button"
+                            className="link-btn"
                             onClick={() => setEditing({ id: r._id as string, review: r.review, score: r.score })}
                           >
                             Edit
@@ -496,23 +570,143 @@ export function MapsHomePage() {
                         )}
                       </div>
                       <div className="comments-section">
-                        {r.comments.map((c) => (
-                          <div key={c._id} className="comment">
-                            <strong>{c.author}</strong>: {c.text} <span>({c.date})</span>
-                          </div>
-                        ))}
-                        {r._id && (
-                          <div className="add-comment">
-                            <input
-                              value={commentDrafts[r._id] || ""}
-                              onChange={(e) => setCommentDrafts((d) => ({ ...d, [r._id as string]: e.target.value }))}
-                              placeholder="Reply…"
-                            />
-                            <button type="button" className="link-btn" onClick={() => handleComment(r._id!)}>
-                              Reply
-                            </button>
-                          </div>
-                        )}
+                        {(() => {
+                          const byParent = new Map<
+                            string,
+                            (typeof r.comments)[number][]
+                          >();
+                          const roots: (typeof r.comments)[number][] = [];
+                          r.comments.forEach((c) => {
+                            if (c.parentId && c._id) {
+                              let arr = byParent.get(c.parentId);
+                              if (!arr) { arr = []; byParent.set(c.parentId, arr); }
+                              arr.push(c);
+                            } else {
+                              roots.push(c);
+                            }
+                          });
+                          const renderComment = (
+                            c: (typeof r.comments)[number],
+                            depth: number
+                          ) => {
+                            const children: (typeof r.comments)[number][] =
+                              c._id ? (byParent.get(c._id) ?? []) : [];
+                            const key = `${r._id}:${c._id ?? "root"}`;
+                            const mine =
+                              Boolean(userId) && c.user_fk === userId;
+                            return (
+                              <div
+                                key={c._id}
+                                className={`comment ${depth > 0 ? "reply" : ""}`}
+                              >
+                                <div className="comment-head">
+                                  <strong>{c.author}</strong>
+                                  <span className="comment-date">{c.date}</span>
+                                  {mine && (
+                                    <button
+                                      type="button"
+                                      className="link-btn danger"
+                                      onClick={() => c._id && handleDeleteComment(c._id)}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="comment-text">{c.text}</p>
+                                {r._id && (
+                                  <button
+                                    type="button"
+                                    className="link-btn comment-reply-btn"
+                                    onClick={() =>
+                                      setReplyTarget({
+                                        reviewId: r._id as string,
+                                        commentId: c._id ?? null,
+                                      })
+                                    }
+                                  >
+                                    Reply
+                                  </button>
+                                )}
+                                {r._id &&
+                                  replyTarget?.reviewId === r._id &&
+                                  replyTarget.commentId === c._id && (
+                                    <div className="add-comment">
+                                      <input
+                                        autoFocus
+                                        value={commentDrafts[key] || ""}
+                                        onChange={(e) =>
+                                          setCommentDrafts((d) => ({ ...d, [key]: e.target.value }))
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            handleComment(r._id as string, c._id ?? null);
+                                          }
+                                        }}
+                                        placeholder="Write a reply…"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="link-btn"
+                                        onClick={() =>
+                                          handleComment(r._id as string, c._id ?? null)
+                                        }
+                                      >
+                                        Reply
+                                      </button>
+                                    </div>
+                                  )}
+                                {children.length > 0 && (
+                                  <div className="comment-nested">
+                                    {children.map((ch) =>
+                                      renderComment(ch, depth + 1)
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+                          return (
+                            <>
+                              {roots.map((c) => renderComment(c, 0))}
+                              {r.comments.length === 0 && (
+                                <p className="italic muted">
+                                  No comments yet.
+                                </p>
+                              )}
+                              {r._id &&
+                                replyTarget?.reviewId === r._id &&
+                                replyTarget.commentId === null && (
+                                  <div className="add-comment">
+                                    <input
+                                      autoFocus
+                                      value={commentDrafts[`${r._id}:root`] || ""}
+                                      onChange={(e) =>
+                                        setCommentDrafts((d) => ({
+                                          ...d,
+                                          [`${r._id as string}:root`]: e.target.value,
+                                        }))
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleComment(r._id as string, null);
+                                        }
+                                      }}
+                                      placeholder="Write a reply…"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="link-btn"
+                                      onClick={() => handleComment(r._id as string, null)}
+                                    >
+                                      Reply
+                                    </button>
+                                  </div>
+                                )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   ))}
@@ -560,7 +754,7 @@ export function MapsHomePage() {
         </div>
       )}
 
-      <MapContainer center={CENTER} zoom={ZOOM} zoomSnap={0.5} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={mapCenter} zoom={mapZoom} zoomSnap={0.5} style={{ height: "100%", width: "100%" }}>
         <TileLayer
           attribution={tiles.attribution}
           url={tiles.url}
@@ -570,26 +764,35 @@ export function MapsHomePage() {
         {adding && (
           <MapClickHandler onPlace={(p) => setDraft(p)} />
         )}
-        {spots.map((s) => (
-          <Marker
-            key={s._id}
-            position={[s.lat, s.lng]}
-            icon={spotIcon}
-            eventHandlers={{ click: () => openSpot(s) }}
-          >
-            <Tooltip direction="top" offset={[0, -12]}>
-              <SpotTooltip
-                name={s.name}
-                street={s.street}
-                city={s.city}
-                status={s.status}
-                hint="Click to view details"
-              />
-            </Tooltip>
-          </Marker>
-        ))}
+        {spots.map((s) => {
+          const base = resolveMarker(s.marker);
+          return (
+            <Marker
+              key={s._id}
+              position={[s.lat, s.lng]}
+              icon={spotIconFor(
+                base.emoji,
+                s.markerColor ?? base.color ?? activeMap?.defaultMarkerColor ?? DEFAULT_MARKER.color
+              )}
+              eventHandlers={{ click: () => openSpot(s) }}
+            >
+              <Tooltip direction="top" offset={[0, -12]}>
+                <SpotTooltip
+                  name={s.name}
+                  street={s.street}
+                  city={s.city}
+                  status={s.status}
+                  hint="Click to view details"
+                />
+              </Tooltip>
+            </Marker>
+          );
+        })}
         {draft && (
-          <Marker position={draft} icon={draftIcon}>
+          <Marker
+            position={draft}
+            icon={spotIconFor(pickMarkerEmoji, getMarkerColor(pickMarkerColor))}
+          >
             <Tooltip permanent direction="top" offset={[0, -16]}>
               <SpotTooltip name="New spot" hint="Click anywhere to move" />
             </Tooltip>
@@ -613,15 +816,63 @@ export function MapsHomePage() {
             transform: "translateX(-50%)",
             background: "#fff",
             padding: 12,
-            borderRadius: 8,
-            boxShadow: "0 2px 12px rgba(0,0,0,.2)",
+            borderRadius: 0,
+            boxShadow: "var(--shadow-lg)",
             display: "flex",
+            flexDirection: "column",
             gap: 8,
+            width: "min(360px, 90vw)",
             zIndex: 1000,
           }}
         >
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
-          <button type="submit" className="action-btn2">Save spot</button>
+          {activeMap?.submissionNote && (
+            <div
+              className="map-submit-note"
+              style={{
+                borderLeftColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
+              }}
+            >
+              {activeMap.submissionNote}
+            </div>
+          )}
+          <div className="marker-picker-inline">
+            {MARKER_PRESETS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                title={m.label}
+                className={`marker-opt ${m.emoji === pickMarkerEmoji ? "active" : ""}`}
+                onClick={() => {
+                  setNewMarker(m.emoji);
+                  setNewMarkerColor(m.color);
+                }}
+              >
+                {m.emoji}
+              </button>
+            ))}
+            <input
+              type="color"
+              value={getMarkerColor(pickMarkerColor)}
+              onChange={(e) => setNewMarkerColor(e.target.value)}
+              title="Custom color"
+            />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              className="pm-marker"
+              style={{
+                width: 28,
+                height: 28,
+                background: getMarkerColor(pickMarkerColor),
+              }}
+            >
+              <span>{pickMarkerEmoji}</span>
+            </span>
+            <button type="submit" className="action-btn2" disabled={!newName.trim()}>
+              Save spot
+            </button>
+          </div>
         </form>
       )}
 

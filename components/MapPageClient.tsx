@@ -13,6 +13,16 @@ const MapsHomePage = dynamic(
   { ssr: false }
 );
 
-export function MapPageClient() {
-  return backendLive ? <MapsHomePage /> : <SpotsPage />;
+export function MapPageClient({
+  initialCenter,
+  initialZoom,
+}: {
+  initialCenter?: [number, number];
+  initialZoom?: number;
+}) {
+  return backendLive ? (
+    <MapsHomePage initialCenter={initialCenter} initialZoom={initialZoom} />
+  ) : (
+    <SpotsPage />
+  );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { client } from "./client";
+import { MAP_FIELDS } from "./queries";
 import type { MapDocument } from "@/lib/types";
 
 export function useMapById(id: string | null): {
@@ -20,7 +21,7 @@ export function useMapById(id: string | null): {
     setLoading(true);
     client
       .fetch(
-        `*[_id == $id][0]{ _id, _createdAt, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom }`,
+        `*[_id == $id][0]{ _id, _createdAt, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`,
         { id }
       )
       .then((data) => {
@@ -54,8 +55,8 @@ export function useMaps(ownerId?: string | null): {
     let active = true;
     setLoading(true);
     const query = ownerId
-      ? `*[_type == "map" && ownerId == $ownerId] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom }`
-      : `*[_type == "map" && isPublic == "public"] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom }`;
+      ? `*[_type == "map" && ownerId == $ownerId] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`
+      : `*[_type == "map" && isPublic == "public"] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`;
     client
       .fetch(query, ownerId ? { ownerId } : {})
       .then((data) => {

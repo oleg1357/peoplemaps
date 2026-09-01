@@ -10,3 +10,4 @@ next-env.d.ts
 npm-debug.log*
 dev-server.log
 dev-server.pid
+dev-server-err.log

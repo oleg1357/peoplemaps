@@ -9,13 +9,20 @@ import {
   toggleHelpfulReview as localToggleVote,
   addComment as localAddComment,
   addSpotPhoto as localAddPhoto,
-  isWatching as localIsWatching,
-  toggleWatch as localToggleWatch,
   getSpotPhotosCount,
   getAllReviews,
   getAuthorName,
 } from "./store";
-import type { Spot, Review, ReviewComment, SpotPhoto, SpotStatus, SavedEntry, WatchEntry, ModerationStatus, MapDocument } from "./types";
+import type {
+  Spot,
+  Review,
+  ReviewComment,
+  SpotPhoto,
+  SpotStatus,
+  ModerationStatus,
+  MapDocument,
+  ProfileData,
+} from "./types";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
 // client bundle can decide which experience to render. The API route handlers
@@ -54,13 +61,11 @@ export interface MapData {
   reviews: Review[];
   comments: ReviewComment[];
   photos: SpotPhoto[];
-  watches: WatchEntry[];
-  saved: SavedEntry[];
 }
 
 export async function fetchMapData(mapId: string): Promise<MapData> {
   if (!backendLive) {
-    return { spots: [], reviews: [], comments: [], photos: [], watches: [], saved: [] };
+    return { spots: [], reviews: [], comments: [], photos: [] };
   }
   return req<MapData>(`/api/map-data?mapId=${encodeURIComponent(mapId)}`);
 }
@@ -157,12 +162,38 @@ export async function fetchComments(reviewId: string): Promise<ReviewComment[]> 
   return req<ReviewComment[]>(`/api/comments?reviewId=${encodeURIComponent(reviewId)}`);
 }
 
-export async function addComment(reviewId: string, text: string, userId?: string | null): Promise<ReviewComment | null> {
+export interface AddCommentOptions {
+  userId?: string | null;
+  parentId?: string | null;
+  authorName?: string;
+}
+
+export async function addComment(
+  reviewId: string,
+  text: string,
+  opts: AddCommentOptions = {}
+): Promise<ReviewComment | null> {
   if (!backendLive) {
-    localAddComment(Number(reviewId), text, userId);
+    localAddComment(Number(reviewId), text, opts.userId);
     return null;
   }
-  return req<ReviewComment>("/api/comments", { method: "POST", body: JSON.stringify({ reviewId, text, user_fk: userId }) });
+  return req<ReviewComment>("/api/comments", {
+    method: "POST",
+    body: JSON.stringify({
+      reviewId,
+      text,
+      user_fk: opts.userId,
+      parentId: opts.parentId ?? null,
+      authorName: opts.authorName,
+    }),
+  });
+}
+
+export async function deleteComment(commentId: string): Promise<void> {
+  if (!backendLive) return;
+  await req(`/api/comments?id=${encodeURIComponent(commentId)}`, {
+    method: "DELETE",
+  });
 }
 
 // ---- Photos ----
@@ -185,50 +216,29 @@ export async function getSpotPhotosCountApi(spotId: string): Promise<number> {
   return photos.length;
 }
 
-// ---- Watch ----
-export async function isWatchingApi(spotId: string, userId?: string | null): Promise<boolean> {
-  if (!backendLive) return localIsWatching(Number(spotId), userId);
-  if (!userId) return false;
-  const list = await req<Array<{ spotId: string }>>(`/api/watches?userId=${encodeURIComponent(userId)}`);
-  return list.some((w) => String(w.spotId) === String(spotId));
-}
-
-export async function toggleWatchApi(spotId: string, userId?: string | null): Promise<boolean> {
-  if (!backendLive) return localToggleWatch(Number(spotId), userId);
-  if (!userId) return false;
-  const res = await req<{ ok: boolean; on: boolean }>("/api/watches", {
-    method: "POST",
-    body: JSON.stringify({ spotId, userId }),
-  });
-  return res.on;
-}
-
-// ---- Saved (favourites) ----
-export async function fetchSavedSpots(userId: string | null): Promise<SavedEntry[]> {
-  if (!backendLive || !userId) return [];
-  return req<SavedEntry[]>(`/api/saved?userId=${encodeURIComponent(userId)}`);
-}
-
-export async function toggleSaveApi(spotId: string, userId: string | null): Promise<boolean> {
-  if (!backendLive || !userId) return false;
-  const res = await req<{ ok: boolean; on: boolean }>("/api/saved", {
-    method: "POST",
-    body: JSON.stringify({ userId, spotId }),
-  });
-  return res.on;
-}
-
 // ---- Author name helpers (demo only falls back to local users) ----
 export function authorName(user_fk: number | null | undefined | string): string {
   if (user_fk === null || user_fk === undefined) return "Anonymous";
   return getAuthorName(Number(user_fk));
 }
 
-// ---- Admin (map owners / global admins) ----
+// ---- Admin (map owners / moderators / global admins) ----
 export interface AdminMapEntry extends MapDocument {
   spotTotal: number;
   spotPending: number;
   spotHidden: number;
+  role?: "owner" | "moderator"; // the caller's relationship to this map
+}
+
+// A moderator is granted access to the admin UI for a map but only the "spots"
+// view (approve/reject/hide/edit/destroy). They cannot change settings.
+export interface MapRoleEntry {
+  _id: string;
+  userId: string;
+  displayName?: string;
+  email?: string;
+  addedBy: string;
+  addedAt: string;
 }
 
 export interface AdminMapsResponse {
@@ -241,14 +251,37 @@ export interface CreateMapInput {
   title: string;
   description?: string;
   isPublic?: "public" | "private";
+  accentColor?: string;
+  defaultMarker?: string;
+  defaultMarkerColor?: string;
+  welcomeMessage?: string;
+  submissionNote?: string;
+  maxPhotosPerSpot?: number;
+  requireApproval?: boolean;
 }
 
-export async function createMap(input: CreateMapInput): Promise<{ _id: string; title: string }> {
+export async function createMap(input: CreateMapInput): Promise<{ _id: string; title: string; slug: string | null }> {
   if (!backendLive) throw new Error("backend not configured");
-  return req<{ _id: string; title: string }>("/api/admin/maps", {
+  return req<{ _id: string; title: string; slug: string | null }>("/api/admin/maps", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export type MapSettingsInput = Partial<CreateMapInput> & { baseCenter?: { lat: number; lng: number }; baseZoom?: number };
+
+export async function updateMapSettings(mapId: string, input: MapSettingsInput): Promise<MapDocument | null> {
+  if (!backendLive) return null;
+  const res = await req<{ ok: boolean; map: MapDocument | null }>("/api/admin/maps", {
+    method: "PATCH",
+    body: JSON.stringify({ mapId, ...input }),
+  });
+  return res.map;
+}
+
+export async function destroyMap(mapId: string): Promise<void> {
+  if (!backendLive) return;
+  await req(`/api/admin/maps?mapId=${encodeURIComponent(mapId)}`, { method: "DELETE" });
 }
 
 export async function fetchAdminMaps(): Promise<AdminMapsResponse> {
@@ -287,7 +320,9 @@ export async function setSpotHidden(spotId: string, hidden: boolean): Promise<vo
 
 export async function updateSpotFields(
   spotId: string,
-  fields: Partial<Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status">>
+  fields: Partial<
+    Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status" | "marker" | "markerColor">
+  >
 ): Promise<void> {
   await req("/api/admin/spots", {
     method: "PATCH",
@@ -299,6 +334,58 @@ export async function destroySpot(spotId: string): Promise<void> {
   await req(`/api/admin/spots?spotId=${encodeURIComponent(spotId)}`, {
     method: "DELETE",
   });
+}
+
+// ---- Map roles (moderators, owner-only) ----
+export interface MapRolesResponse {
+  mapId: string;
+  moderators: MapRoleEntry[];
+}
+
+export async function fetchMapModerators(mapId: string): Promise<MapRolesResponse | null> {
+  if (!backendLive) return null;
+  return req<MapRolesResponse>(`/api/admin/maps/roles?mapId=${encodeURIComponent(mapId)}`);
+}
+
+export async function addMapModerator(
+  mapId: string,
+  email: string
+): Promise<MapRolesResponse> {
+  return req<MapRolesResponse>("/api/admin/maps/roles", {
+    method: "POST",
+    body: JSON.stringify({ mapId, email }),
+  });
+}
+
+export async function removeMapModerator(
+  mapId: string,
+  userId: string
+): Promise<void> {
+  await req(
+    `/api/admin/maps/roles?mapId=${encodeURIComponent(mapId)}&userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" }
+  );
+}
+
+// ---- Profile (own contributions) ----
+export async function fetchProfile(): Promise<ProfileData> {
+  if (!backendLive) {
+    return {
+      user: {
+        id: "",
+        email: null,
+        firstName: "",
+        lastName: "",
+        displayName: "",
+        initials: "?",
+        memberSince: null,
+      },
+      stats: { spots: 0, reviews: 0, comments: 0, photos: 0, votes: 0, helpfulReceived: 0, mapsOwned: 0 },
+      maps: [],
+      contributions: { spots: [], reviews: [], comments: [], photos: [] },
+    };
+  }
+  return req<ProfileData>("/api/me");
 }
 
 // Convenience: author display for a Mongo spot (ownerName not stored on spot)

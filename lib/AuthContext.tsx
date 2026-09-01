@@ -9,10 +9,7 @@ import {
   signup as doSignup,
   login as doLogin,
   getUser,
-  getNewSpotsSince,
-  getWatchAlerts,
-  markWatchAlertsNotified,
-} from "./store";
+} from "./auth-store";
 import { supabase, supabaseConfigured } from "./supabase";
 import type { User } from "./data";
 
@@ -227,21 +224,16 @@ export function useNotificationSync() {
       Notification.requestPermission();
     }
     const lastVisited = window.localStorage.getItem("peoplemaps_lastVisited");
-    const count = getNewSpotsSince(lastVisited);
-    if (count > 0 && Notification.permission === "granted") {
-      new Notification(`${count} new spot${count === 1 ? "" : "s"} added`, {
-        body: "Since your last visit!",
-      });
-    }
-    const alerts = getWatchAlerts();
-    alerts.forEach((a) => {
-      if (Notification.permission === "granted") {
-        new Notification(`${a.reviewAuthor} added a review`, {
-          body: `"${a.spotName}" you're watching`,
+    // Demo-only notification feature: the new-spot counter lives in the demo
+    // localStorage layer, so load it lazily to keep it out of the shared bundle.
+    import("./store").then(({ getNewSpotsSince }) => {
+      const count = getNewSpotsSince(lastVisited);
+      if (count > 0 && Notification.permission === "granted") {
+        new Notification(`${count} new spot${count === 1 ? "" : "s"} added`, {
+          body: "Since your last visit!",
         });
       }
     });
-    if (alerts.length > 0) markWatchAlertsNotified();
     window.localStorage.setItem("peoplemaps_lastVisited", new Date().toISOString().slice(0, 10));
   }, []);
 }

@@ -1,25 +1,14 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, getOptionalContext } from "@/lib/api";
-import type {
-  Spot,
-  Review,
-  ReviewComment,
-  SpotPhoto,
-  WatchEntry,
-  SavedEntry,
-} from "@/lib/types";
+import { withDb, json, error } from "@/lib/api";
+import type { Spot, Review, ReviewComment, SpotPhoto } from "@/lib/types";
 
 // GET /api/map-data?mapId=<id>
 // One request that loads everything the map view needs at once: the public
-// spots for the map plus their reviews, comments and photos, and (when the
-// requester is signed in) their watch + saved entries.
+// spots for the map plus their reviews, comments and photos.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mapId = searchParams.get("mapId");
   if (!mapId) return error("Missing mapId");
-
-  const ctx = await getOptionalContext(req);
-  const userId = ctx.userId;
 
   return withDb(async (db) => {
     // Public map only shows spots that have been approved (or predate moderation)
@@ -54,30 +43,24 @@ export async function GET(req: Request) {
           .toArray()
       : [];
 
-    // Photos are data URLs and can be large, so cap the payload. Covers the
-    // per-spot limit of 6 for maps up to ~20 spots.
+    // Photos are data URLs and can be large, so cap the payload. Bound each
+    // spot to its most recent few photos (the app shows at most 6 per spot) so
+    // the response size scales with the number of spots, not with one spot
+    // having uploaded a huge pile of images.
     const photos = spotIds.length
       ? await db
           .collection<SpotPhoto>(COLLECTIONS.photos)
-          .find({ spotId: { $in: spotIds } })
-          .sort({ date: -1 })
-          .limit(120)
+          .aggregate<SpotPhoto>([
+            { $match: { spotId: { $in: spotIds } } },
+            { $sort: { date: -1 } },
+            { $group: { _id: "$spotId", docs: { $push: "$$ROOT" } } },
+            { $project: { docs: { $slice: ["$docs", 6] } } },
+            { $unwind: "$docs" },
+            { $replaceRoot: { newRoot: "$docs" } },
+          ])
           .toArray()
       : [];
 
-    const [watches, saved] = userId
-      ? [
-          await db
-            .collection<WatchEntry>(COLLECTIONS.watches)
-            .find({ userId })
-            .toArray(),
-          await db
-            .collection<SavedEntry>(COLLECTIONS.saved)
-            .find({ userId })
-            .toArray(),
-        ]
-      : [[], []];
-
-    return json({ spots, reviews, comments, photos, watches, saved });
+    return json({ spots, reviews, comments, photos });
   });
 }

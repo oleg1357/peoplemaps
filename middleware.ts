@@ -27,29 +27,34 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // Refreshes the auth cookie chain when needed and completes an OAuth `code`
-  // exchange (code → session cookies) for the callback route. Call once per
-  // request; it is a no-op when the session is already valid.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // On the OAuth callback, complete the `code` → session cookie exchange and
+  // refresh the cookie chain. This is the only path that needs an auth lookup
+  // (getUser) here; every other route relies on the client-side AuthContext
+  // (and server-side route guards) instead, so we skip the Supabase network
+  // round-trip on all other requests to keep request counts low.
+  if (request.nextUrl.pathname === "/login/callback") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // On the OAuth callback, the cookie chain is only fully established once the
-  // exchange completes; send the user home where AuthContext signs them in.
-  // Copy the fresh auth cookies onto the redirect so the session persists.
-  if (request.nextUrl.pathname === "/login/callback" && user) {
-    const redirect = NextResponse.redirect(new URL("/", request.url));
-    response.cookies
-      .getAll()
-      .forEach((c) => redirect.cookies.set(c.name, c.value, c));
-    return redirect;
+    // The cookie chain is only fully established once the exchange completes;
+    // send the user home where AuthContext signs them in. Copy the fresh auth
+    // cookies onto the redirect so the session persists.
+    if (user) {
+      const redirect = NextResponse.redirect(new URL("/", request.url));
+      response.cookies
+        .getAll()
+        .forEach((c) => redirect.cookies.set(c.name, c.value, c));
+      return redirect;
+    }
   }
 
   return response;
 }
 
+// Only the OAuth callback needs middleware (to exchange the `code` for session
+// cookies). Everything else is handled by the client-side AuthContext and
+// server-side route guards, so running middleware elsewhere just adds cost.
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
-  ],
+  matcher: ["/login/callback"],
 };

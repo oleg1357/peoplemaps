@@ -1,0 +1,186 @@
+/* --- PeopleMaps styles: nav (extracted from app/globals.css) --- */
+/* ---------- Header / Nav ---------- */
+#nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  z-index: 10001;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(19, 27, 35, 0.06);
+}
+
+#nav .logo {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+
+#nav .logo-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+
+#logo-text {
+  font-size: 20px;
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.5px;
+}
+
+.peoplemaps-logo {
+  display: block;
+}
+
+#nav .nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#nav a {
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-size: 15px;
+}
+
+#nav a:hover {
+  background: rgba(97, 198, 122, 0.14);
+}
+
+#nav a.active {
+  color: var(--green-dark);
+  font-weight: 600;
+  background: rgba(97, 198, 122, 0.12);
+}
+
+#nav a#map-link {
+  background-image: linear-gradient(19deg, var(--green) 0%, var(--green-light) 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+#nav a#map-link:hover {
+  filter: brightness(1.03);
+  background-image: linear-gradient(19deg, var(--green-light) 0%, var(--green) 100%);
+}
+
+#nav a#map-link.active {
+  color: #fff;
+}
+
+#log-out {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 0;
+  font-size: 15px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+#log-out:hover {
+  background: rgba(220, 70, 70, 0.12);
+  color: var(--danger);
+}
+
+#nav a,
+#nav #log-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Mobile hamburger ---------- */
+.nav-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nav-burger:hover {
+  background: rgba(97, 198, 122, 0.14);
+}
+
+.nav-burger span {
+  display: block;
+  height: 2px;
+  width: 22px;
+  background: var(--ink);
+  border-radius: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.nav-burger.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav-burger.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-burger.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.nav-backdrop {
+  position: fixed;
+  inset: var(--header-h) 0 0 0;
+  z-index: 10000;
+  padding: 0;
+  border: none;
+  background: rgba(19, 27, 35, 0.28);
+  cursor: pointer;
+  backdrop-filter: blur(1px);
+}
+
+#theme-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+#theme-toggle:hover {
+  background: rgba(97, 198, 122, 0.14);
+  color: var(--green-dark);
+}
+
+#nav .nav-links #theme-toggle {
+  margin-left: 6px;
+}
+

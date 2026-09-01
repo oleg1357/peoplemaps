@@ -24,7 +24,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }>;
       maps.forEach((m) => {
         routes.push({
-          url: `${origin}/map?map=${m._id}`,
+          url: m.slug
+            ? `${origin}/map/${encodeURIComponent(m.slug)}`
+            : `${origin}/map?map=${m._id}`,
           lastModified: m._updatedAt ?? new Date(),
           changeFrequency: "daily",
           priority: 0.7,

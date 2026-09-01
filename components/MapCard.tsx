@@ -5,6 +5,7 @@ import { IconMapMarker, IconUser } from "./icons";
 
 export interface HomeMapCardData {
   id: string;
+  slug?: string;
   title: string;
   description: string;
   ownerName: string;
@@ -21,9 +22,10 @@ export function MapCard({
 }) {
   const hues = ["#61C67A", "#69D57C", "#4BB0E8", "#F0AD00", "#E8796F"];
   const accent = map.accent ?? hues[index % hues.length];
+  const href = map.slug ? `/map/${encodeURIComponent(map.slug)}` : "/map";
 
   return (
-    <Link href="/map" className="home-map-card">
+    <Link href={href} className="home-map-card">
       <div
         className="home-map-card-accent"
         style={{ background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}

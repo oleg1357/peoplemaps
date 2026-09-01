@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { backendLive } from "@/lib/api-client";
-import { useMaps } from "@/sanity/lib/maps";
 import { PeopleMapsLogo } from "./Logo";
 import { MapCard, type HomeMapCardData } from "./MapCard";
 import { IconMapMarker } from "./icons";
@@ -46,17 +44,9 @@ const DEMO_MAPS: HomeMapCardData[] = [
   },
 ];
 
-export function HomePage() {
-  const { maps } = useMaps();
-
-  const liveMaps: HomeMapCardData[] = (backendLive ? maps : []).map((m) => ({
-    id: m._id,
-    title: m.title,
-    description: m.description ?? "",
-    ownerName: m.ownerName || "Community",
-    spotCount: 0,
-  }));
-
+export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
+  // Public maps + their spot counts are resolved server-side (see app/page.tsx)
+  // and passed in as props, so the homepage makes no client data requests.
   const allMaps = [...liveMaps, ...DEMO_MAPS];
 
   return (

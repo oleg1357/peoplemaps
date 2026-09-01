@@ -1,0 +1,391 @@
+/* --- PeopleMaps styles: components (extracted from app/globals.css) --- */
+/* ---------- Buttons ---------- */
+button {
+  font-family: var(--font);
+}
+
+.action-btn {
+  background-image: linear-gradient(19deg, var(--green) 0%, var(--green-light) 100%);
+  border: none;
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.action-btn:hover {
+  filter: brightness(1.04);
+}
+
+.action-btn:active {
+  transform: translateY(1px);
+}
+
+.action-btn2 {
+  border: 2px solid var(--green);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 9px 18px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.action-btn2:hover {
+  background: rgba(97, 198, 122, 0.12);
+}
+
+/* ---------- Toggle / segmented control ---------- */
+.toggle-group {
+  display: inline-flex;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 4px;
+  gap: 4px;
+  box-shadow: var(--shadow-md);
+}
+
+.toggle-btn {
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 500;
+  color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  color: var(--ink);
+}
+
+.toggle-btn.active {
+  background-image: linear-gradient(19deg, var(--green) 0%, var(--green-light) 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Auth / content pages ---------- */
+.auth-layout {
+  height: 100%;
+}
+
+.sign-box,
+.home-content,
+.profile-box {
+  height: 100%;
+}
+
+.sign-box {
+  width: 50%;
+}
+
+.singin-image {
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.singin-image .flex {
+  justify-content: center;
+}
+
+.auth-card {
+  background: var(--surface);
+  width: 375px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.2em 2em;
+  margin: 0 auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-card h2 {
+  margin: 0 0 0.5em;
+  font-size: 1.5em;
+}
+
+.input {
+  margin: 0.3em 0;
+  display: block;
+  padding: 13px 14px;
+  font-size: 14px;
+  border-radius: var(--radius);
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(97, 198, 122, 0.2);
+  background: var(--surface);
+}
+
+.input::placeholder {
+  color: var(--muted);
+}
+
+.auth-error {
+  color: var(--danger);
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+
+.signin .action-btn,
+.signup .action-btn {
+  margin-top: 1.4em;
+  width: 100%;
+}
+
+.signin .action-btn2,
+.signup .action-btn2 {
+  display: block;
+  margin: 1em auto 0 auto;
+  width: 100%;
+}
+
+/* "or" divider between email form and OAuth */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  width: 100%;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.google-btn {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.google-btn:hover {
+  background: var(--surface-2);
+}
+
+
+/* ---------- About ---------- */
+#home {
+  display: flex;
+  height: 100%;
+}
+
+#home .sign-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.about-icon {
+  display: flex;
+  justify-content: center;
+}
+
+#about-text {
+  width: 350px;
+  text-align: center;
+}
+
+#about-text .italic {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+#about-text .bold {
+  display: block;
+  color: var(--green-dark);
+}
+
+#home .home-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+#list {
+  width: 460px;
+  text-align: left;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 1.5em 2em;
+  box-shadow: var(--shadow-md);
+}
+
+#list p {
+  margin: 0.6em 0;
+}
+
+#list .bold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background-image: linear-gradient(19deg, var(--green) 0%, var(--green-light) 100%);
+  color: #fff;
+  font-size: 13px;
+}
+
+/* ---------- Profile ---------- */
+.profile-box {
+  width: 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 3em;
+  text-align: center;
+}
+
+.profile-box > div {
+  margin: 6px 0;
+}
+
+.profile-box h2 {
+  margin: 8px 0 2px;
+}
+
+.circle {
+  width: 116px;
+  height: 116px;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+  border-radius: 60px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle svg {
+  color: #fff;
+}
+
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.profile-content {
+  width: 60%;
+  padding: 3em 2em 2em 1em;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.profile-title {
+  margin-bottom: 16px;
+}
+
+.profile-title h2 {
+  margin: 0;
+}
+
+.profile-content .flex {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#favourites-overview {
+  text-align: left;
+  width: 300px;
+}
+
+.fav-card {
+  max-width: 344px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.fav-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.fav-card-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  padding: 14px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fav-card-sub {
+  padding: 4px 16px;
+  color: var(--muted);
+}
+
+.fav-card-text {
+  padding: 4px 16px 14px;
+  color: var(--ink);
+}
+
+/* ---------- NotFound ---------- */
+#not-found {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+#not-found h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+}
+
+#oops-text {
+  max-width: 460px;
+  margin: 0;
+  padding: 0 1em 1.5em;
+  font-weight: 500;
+  font-size: 1.15em;
+}
+

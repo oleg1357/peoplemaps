@@ -1,9 +1,15 @@
+import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json } from "@/lib/api";
 import { NextResponse } from "next/server";
-import { getAdminContext } from "@/lib/admin";
+import { getAdminContext, canManageMap, getMap } from "@/lib/admin";
 import { serverClient, writeClient } from "@/sanity/lib/client";
 import { getServerSupabase } from "@/lib/supabase-server";
-import { COLLECTIONS } from "@/lib/mongodb";
+import {
+  DEFAULT_ACCENT,
+  DEFAULT_MARKER,
+  hasValidColor,
+  sanitizeMarkerEmoji,
+} from "@/lib/markers-data";
 import type { MapDocument } from "@/lib/types";
 
 // GET /api/admin/maps  -> maps the caller may moderate.
@@ -23,7 +29,7 @@ export async function GET(req: Request) {
 
   try {
     maps = await serverClient.fetch<MapDocument[]>(
-      `*[_type == "map"] | order(_createdAt desc){ _id, title, description, ownerId, ownerName, isPublic }`
+      `*[_type == "map"] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom, accentColor, defaultMarker, defaultMarkerColor, welcomeMessage, submissionNote, maxPhotosPerSpot, requireApproval }`
     );
   } catch {
     maps = [];
@@ -31,29 +37,63 @@ export async function GET(req: Request) {
 
   const owned = isAdmin ? maps : maps.filter((m) => m.ownerId === ctx.userId);
 
+  // Moderators also get a "spots only" admin view of maps they don't own.
+  let moderatorMapIds: Set<string> = new Set();
+  if (!isAdmin && ctx.userId) {
+    try {
+      const db = await getDb();
+      if (db) {
+        const roleCol = db.collection<import("@/lib/types").MapRole>(COLLECTIONS.mapRoles);
+        const roles = await roleCol
+          .find({ userId: ctx.userId })
+          .project({ mapId: 1 })
+          .toArray();
+        moderatorMapIds = new Set(roles.map((r) => r.mapId));
+      }
+    } catch {
+      moderatorMapIds = new Set();
+    }
+  }
+
+  const viewable = isAdmin
+    ? maps
+    : [
+        ...owned,
+        ...maps.filter((m) => moderatorMapIds.has(m._id) && m.ownerId !== ctx.userId),
+      ];
+
   // Attach moderate-able maps + spot moderation counts. When Mongo is
   // unreachable we still return the map list (counts shown as 0) so the admin
   // UI keeps working instead of 500ing.
-  const dbResult = await withDb(async (db) => {
-    const col = db.collection(COLLECTIONS.spots);
-    const moderated = await Promise.all(
-      owned.map(async (m) => {
-        const spots = await col.find({ mapId: m._id }).toArray();
-        return {
-          ...m,
-          spotTotal: spots.length,
-          spotPending: spots.filter((s) => s.moderation === "pending").length,
-          spotHidden: spots.filter((s) => s.hidden === true).length,
-        };
-      })
-    );
-    return moderated as (MapDocument & { spotTotal: number; spotPending: number; spotHidden: number })[];
-  });
+  let withCounts:
+    | (MapDocument & { spotTotal: number; spotPending: number; spotHidden: number })[]
+    | null = null;
+  try {
+    const db = await getDb();
+    if (db) {
+      const col = db.collection(COLLECTIONS.spots);
+      withCounts = (await Promise.all(
+        viewable.map(async (m) => {
+          const spots = await col.find({ mapId: m._id }).toArray();
+          return {
+            ...m,
+            spotTotal: spots.length,
+            spotPending: spots.filter((s) => s.moderation === "pending").length,
+            spotHidden: spots.filter((s) => s.hidden === true).length,
+          };
+        })
+      )) as (MapDocument & { spotTotal: number; spotPending: number; spotHidden: number })[];
+    }
+  } catch {
+    withCounts = null;
+  }
 
-  const result =
-    dbResult instanceof NextResponse
-      ? owned.map((m) => ({ ...m, spotTotal: 0, spotPending: 0, spotHidden: 0 }))
-      : dbResult;
+  const roleFor = (m: MapDocument): "owner" | "moderator" =>
+    m.ownerId === ctx.userId ? "owner" : moderatorMapIds.has(m._id) ? "moderator" : "owner";
+
+  const result = (withCounts ?? viewable.map((m) => ({ ...m, spotTotal: 0, spotPending: 0, spotHidden: 0 }))).map(
+    (m) => ({ ...m, role: roleFor(m) })
+  );
 
   return json({ maps: result, owned: result, isAdmin });
 }
@@ -92,6 +132,21 @@ export async function POST(req: Request) {
 
   const isPublic = body.isPublic === "private" ? "private" : "public";
 
+  // Settings with validated defaults.
+  const accentColor = hasValidColor(body.accentColor)
+    ? String(body.accentColor)
+    : DEFAULT_ACCENT;
+  const defaultMarker =
+    sanitizeMarkerEmoji(body.defaultMarker) ?? DEFAULT_MARKER.emoji;
+  const defaultMarkerColor = hasValidColor(body.defaultMarkerColor)
+    ? String(body.defaultMarkerColor)
+    : DEFAULT_MARKER.color;
+  const maxPhotos =
+    Number.isFinite(Number(body.maxPhotosPerSpot))
+      ? Math.max(0, Math.min(12, Number(body.maxPhotosPerSpot)))
+      : 6;
+  const requireApproval = body.requireApproval === false ? false : true;
+
   try {
     const doc = await writeClient.create({
       _type: "map",
@@ -106,11 +161,151 @@ export async function POST(req: Request) {
         lng: Number(body.lng ?? 12.5683),
       },
       baseZoom: Number(body.baseZoom ?? 12),
+      accentColor,
+      defaultMarker,
+      defaultMarkerColor,
+      welcomeMessage: String(body.welcomeMessage ?? ""),
+      submissionNote: String(body.submissionNote ?? ""),
+      maxPhotosPerSpot: maxPhotos,
+      requireApproval,
     });
-    return json({ _id: doc._id, title: doc.title }, { status: 201 });
+    return json(
+      { _id: doc._id, title: doc.title, slug: doc.slug?.current ?? null },
+      { status: 201 }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown Sanity error";
     return json({ error: `Failed to create map: ${message}` }, { status: 500 });
+  }
+}
+
+// PATCH /api/admin/maps -> update settings for a map the user owns.
+export async function PATCH(req: Request) {
+  const { mapId, ...input } = (await req.json()) as Record<string, unknown>;
+  if (!mapId) return json({ error: "Missing mapId" }, { status: 400 });
+
+  const ctx = await getAdminContext(req);
+  const perm = await canManageMap(ctx, String(mapId));
+  if (!perm.ok) return json({ error: perm.reason || "Forbidden" }, { status: 403 });
+  if (!writeClient || !serverClient) {
+    return json(
+      { error: "Sanity is not configured for the server." },
+      { status: 503 }
+    );
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (input.title !== undefined) {
+    const title = String(input.title ?? "").trim();
+    if (title.length < 2) {
+      return json({ error: "Map title must be at least 2 characters." }, { status: 400 });
+    }
+    patch.title = title;
+    patch.slug = { _type: "slug", current: slugify(title) };
+  }
+  if (input.description !== undefined) patch.description = String(input.description ?? "");
+  if (input.isPublic !== undefined && String(input.isPublic) !== "") {
+    patch.isPublic = input.isPublic === "private" ? "private" : "public";
+  }
+  if (input.accentColor !== undefined) {
+    if (!hasValidColor(String(input.accentColor))) {
+      return json({ error: "Invalid accent color." }, { status: 400 });
+    }
+    patch.accentColor = String(input.accentColor);
+  }
+  if (input.defaultMarker !== undefined) {
+    const marker = sanitizeMarkerEmoji(String(input.defaultMarker));
+    if (!marker) {
+      return json({ error: "Unknown marker." }, { status: 400 });
+    }
+    patch.defaultMarker = marker;
+  }
+  if (input.defaultMarkerColor !== undefined) {
+    if (!hasValidColor(String(input.defaultMarkerColor))) {
+      return json({ error: "Invalid marker color." }, { status: 400 });
+    }
+    patch.defaultMarkerColor = String(input.defaultMarkerColor);
+  }
+  if (input.welcomeMessage !== undefined) {
+    patch.welcomeMessage = String(input.welcomeMessage ?? "");
+  }
+  if (input.submissionNote !== undefined) {
+    patch.submissionNote = String(input.submissionNote ?? "");
+  }
+  if (input.maxPhotosPerSpot !== undefined) {
+    const n = Math.max(0, Math.min(12, Number(input.maxPhotosPerSpot)));
+    if (!Number.isFinite(n)) {
+      return json({ error: "Invalid max photos value." }, { status: 400 });
+    }
+    patch.maxPhotosPerSpot = n;
+  }
+  if (input.requireApproval !== undefined) {
+    patch.requireApproval = input.requireApproval === false ? false : true;
+  }
+  if (input.baseCenter !== undefined) {
+    const c = input.baseCenter as { lat?: number; lng?: number };
+    if (
+      typeof c === "object" &&
+      c !== null &&
+      Number.isFinite(Number(c.lat)) &&
+      Number.isFinite(Number(c.lng))
+    ) {
+      patch.baseCenter = { lat: Number(c.lat), lng: Number(c.lng) };
+    }
+  }
+  if (input.baseZoom !== undefined) {
+    const z = Number(input.baseZoom);
+    if (Number.isFinite(z)) patch.baseZoom = Math.max(3, Math.min(18, z));
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return json({ error: "Nothing to update." }, { status: 400 });
+  }
+
+  try {
+    await writeClient.patch(String(mapId)).set(patch).commit();
+    const updated = await getMap(String(mapId));
+    return json({ ok: true, map: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Sanity error";
+    return json({ error: `Failed to update map: ${message}` }, { status: 500 });
+  }
+}
+
+// DELETE /api/admin/maps?mapId=<id> -> remove a map and all of its data.
+export async function DELETE(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const mapId = searchParams.get("mapId");
+  if (!mapId) return json({ error: "Missing mapId" }, { status: 400 });
+
+  const ctx = await getAdminContext(req);
+  const perm = await canManageMap(ctx, mapId);
+  if (!perm.ok) return json({ error: perm.reason || "Forbidden" }, { status: 403 });
+  if (!writeClient) {
+    return json(
+      { error: "Sanity is not configured for the server." },
+      { status: 503 }
+    );
+  }
+
+  try {
+    await writeClient.delete(mapId);
+    await withDb(async (db) => {
+      const col = db.collection(COLLECTIONS.spots);
+      const spots = await col.find({ mapId }).toArray();
+      const spotIds = spots.map((s) => String(s._id));
+      await col.deleteMany({ mapId });
+      if (spotIds.length > 0) {
+        await db.collection(COLLECTIONS.reviews).deleteMany({ spotId: { $in: spotIds } });
+        await db.collection(COLLECTIONS.photos).deleteMany({ spotId: { $in: spotIds } });
+        await db.collection(COLLECTIONS.comments).deleteMany({ spotId: { $in: spotIds } });
+        await db.collection(COLLECTIONS.votes).deleteMany({ spotId: { $in: spotIds } });
+      }
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Sanity error";
+    return json({ error: `Failed to delete map: ${message}` }, { status: 500 });
   }
 }
 

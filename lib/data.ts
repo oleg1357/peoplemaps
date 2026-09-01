@@ -135,6 +135,4 @@ export const INITIAL_REVIEWS: Review[] = [
   { id: 12, spot_fk: 12, review: "", score: 3, date: "2025-06-25" },
 ];
 
-export const INITIAL_USERS: User[] = [
-  { id: 1, firstName: "PeopleMaps", lastName: "Demo", email: "demo@peoplemaps.app", userPassword: "demo123" },
-];
+export { INITIAL_USERS } from "./auth-data";

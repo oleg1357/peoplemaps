@@ -52,8 +52,7 @@ export const COLLECTIONS = {
   comments: "comments",
   photos: "photos",
   votes: "votes",
-  saved: "saved",
-  watches: "watches",
+  mapRoles: "map_roles",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

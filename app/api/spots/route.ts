@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
-import { getAdminContext, getMap, isGlobalAdmin, canModerateMap } from "@/lib/admin";
+import { getAdminContext, getMap, isGlobalAdmin, canModerateMap, isMapModerator } from "@/lib/admin";
+import { sanitizeMarkerEmoji } from "@/lib/markers-data";
 import type { Spot } from "@/lib/types";
 import type { Filter } from "mongodb";
 
@@ -57,9 +58,22 @@ export async function POST(req: Request) {
 
   let moderation: Spot["moderation"] = "pending";
   const map = await getMap(mapId);
-  if (isGlobalAdmin(ctx.userId) || (map?.ownerId && map.ownerId === ctx.userId)) {
+  // The map owner, global admins and designated moderators are always trusted; a
+  // map can also disable approval entirely so everyone's spots go live
+  // immediately.
+  if (
+    isGlobalAdmin(ctx.userId) ||
+    (map?.ownerId && map.ownerId === ctx.userId) ||
+    (await isMapModerator(mapId, ctx.userId))
+  ) {
+    moderation = "approved";
+  } else if (map && map.requireApproval === false) {
     moderation = "approved";
   }
+
+  // Only the known marker emoji are stored; everything else falls back to the
+  // map's default on the client.
+  const marker = sanitizeMarkerEmoji(String(body.marker ?? ""));
 
   const spot: Spot = {
     mapId,
@@ -74,6 +88,7 @@ export async function POST(req: Request) {
     moderation,
     hidden: false,
     reviewNote: null,
+    marker: marker ?? undefined,
   };
   return withDb(async (db) => {
     const col = db.collection<Spot>(COLLECTIONS.spots);
@@ -109,12 +124,11 @@ export async function DELETE(req: Request) {
       const perm = await canModerateMap(ctx, existing.mapId);
       if (!perm.ok) return error(perm.reason || "Forbidden", 403);
     }
-    await col.deleteOne(byIdFilter<Spot>(oid));
+await col.deleteOne(byIdFilter<Spot>(oid));
     await db.collection(COLLECTIONS.reviews).deleteMany({ spotId });
     await db.collection(COLLECTIONS.photos).deleteMany({ spotId });
     await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
     await db.collection(COLLECTIONS.votes).deleteMany({ spotId });
-    await db.collection(COLLECTIONS.saved).deleteMany({ spotId });
     return NextResponse.json({ ok: true });
   });
 }
