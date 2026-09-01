@@ -19,7 +19,13 @@ export function notConfigured() {
 }
 
 export async function withDb<T>(fn: (db: NonNullable<Awaited<ReturnType<typeof getDb>>>) => Promise<T>) {
-  const db = await getDb();
+  let db;
+  try {
+    db = await getDb();
+  } catch (err) {
+    console.error("DB connection failed:", err instanceof Error ? err.message : err);
+    return error("Database is unreachable. Check MONGODB_URI / MONGODB_TIMEOUT_MS.", 503);
+  }
   if (!db) return notConfigured();
   try {
     const result = await fn(db);

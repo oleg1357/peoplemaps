@@ -15,7 +15,7 @@ export const client = sanityConfigured
       projectId: projectId as string,
       dataset,
       apiVersion,
-      useCdn: true,
+      useCdn: false,
     })
   : null;
 
@@ -26,5 +26,18 @@ export const serverClient = sanityConfigured
       apiVersion,
       useCdn: false,
       token: process.env.SANITY_API_READ_TOKEN,
+    })
+  : null;
+
+// Server-side client with write access. Used to create/update map documents,
+// e.g. POST /api/admin/maps. Requires a write-capable API token in
+// SANITY_API_WRITE_TOKEN; the read token can NOT create documents.
+export const writeClient = sanityConfigured && process.env.SANITY_API_WRITE_TOKEN
+  ? createClient({
+      projectId: projectId as string,
+      dataset,
+      apiVersion,
+      useCdn: false,
+      token: process.env.SANITY_API_WRITE_TOKEN,
     })
   : null;

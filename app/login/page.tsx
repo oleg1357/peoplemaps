@@ -8,19 +8,27 @@ import { PeopleMapsLogo } from "@/components/Logo";
 import { PageMeta } from "@/components/PageMeta";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle, authError, usingSupabase } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [error, setError] = useState("");
 
+  const effectiveError = authError || error;
+
   const submit = () => {
+    setError("");
     const res = login(email, userPassword);
     if (!res.ok) {
       setError(res.message);
-    } else {
+    } else if (!usingSupabase) {
       router.push("/");
     }
+  };
+
+  const google = () => {
+    setError("");
+    loginWithGoogle();
   };
 
   return (
@@ -44,10 +52,18 @@ export default function LoginPage() {
               value={userPassword}
               onChange={(e) => setUserPassword(e.target.value)}
             />
-            {error && <p className="auth-error">{error}</p>}
+            {effectiveError && <p className="auth-error">{effectiveError}</p>}
             <div>
               <button className="action-btn" onClick={submit}>
                 Log in
+              </button>
+            </div>
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+            <div>
+              <button className="action-btn2 google-btn" onClick={google}>
+                Continue with Google
               </button>
             </div>
             <div>

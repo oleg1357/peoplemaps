@@ -432,11 +432,41 @@ button {
   width: 100%;
 }
 
-.signin .action-btn2 {
+.signin .action-btn2,
+.signup .action-btn2 {
   display: block;
   margin: 1em auto 0 auto;
   width: 100%;
 }
+
+/* "or" divider between email form and OAuth */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  width: 100%;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.google-btn {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.google-btn:hover {
+  background: var(--surface-2);
+}
+
 
 /* ---------- About ---------- */
 #home {
@@ -1379,6 +1409,43 @@ button {
   color: var(--ink);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
+}
+
+#add-fab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
+#map-note,
+#map-note-error {
+  position: absolute;
+  z-index: 9998;
+  top: calc(var(--header-h) + 10px);
+  left: 30%;
+  right: 30%;
+  text-align: center;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+#map-note {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+#map-note a {
+  color: var(--green);
+  font-weight: 600;
+}
+
+#map-note-error {
+  background: #fdecea;
+  color: #b3261e;
+  border: 1px solid #f5c6c2;
 }
 
 /* ---------- Add-spot flow ---------- */
@@ -2839,6 +2906,35 @@ button {
 
 .admin-head p {
   margin: 0;
+}
+
+.admin-head {
+  position: relative;
+}
+
+.admin-create-btn {
+  margin-top: 14px;
+}
+
+.admin-create-map {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+  margin: 18px 0;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-create-map h3 {
+  margin: 0;
+}
+
+.admin-create-map .action-btn {
+  align-self: flex-start;
 }
 
 .admin-empty {

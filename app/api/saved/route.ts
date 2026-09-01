@@ -4,7 +4,8 @@ import type { SavedEntry } from "@/lib/types";
 
 // ---- Saved (favourites) ----
 // GET /api/saved?userId=<id>
-// POST /api/saved -> { userId, spotId, note, on }
+// POST /api/saved -> { spotId, userId?, note?, on? }. Toggles when `on` is
+// omitted, so a signed-in user's click is a single request. Returns { ok, on }.
 export async function GET(req: Request) {
   const ctx = await getOptionalContext(req);
   const { searchParams } = new URL(req.url);
@@ -22,12 +23,15 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const ctx = await getOptionalContext(req);
   const body = await req.json();
+  const spotId: string = String(body.spotId ?? "");
   const userId = body.userId ?? ctx.userId;
-  if (!body.spotId || !userId) return error("Missing spotId or userId");
-  const spotId: string = String(body.spotId);
-  const on = Boolean(body.on);
+  if (!spotId || !userId) return error("Missing spotId or userId");
   return withDb(async (db) => {
     const col = db.collection<SavedEntry>(COLLECTIONS.saved);
+    const on =
+      body.on !== undefined
+        ? Boolean(body.on)
+        : !(await col.findOne({ userId, spotId }));
     if (on) {
       await col.updateOne(
         { userId, spotId },
@@ -37,6 +41,6 @@ export async function POST(req: Request) {
     } else {
       await col.deleteOne({ userId, spotId });
     }
-    return json({ ok: true });
+    return json({ ok: true, on });
   });
 }

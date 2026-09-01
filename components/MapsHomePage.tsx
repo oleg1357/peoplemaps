@@ -10,9 +10,6 @@ import { tileLayer, MAP_STYLES } from "@/lib/tiles";
 import type { MapStyle } from "@/lib/tiles";
 import type { Spot, SpotStatus } from "@/lib/types";
 import {
-  fetchReviews,
-  fetchComments,
-  fetchPhotos,
   addReview,
   updateReview,
   deleteReview,
@@ -20,15 +17,11 @@ import {
   toggleHelpfulReview,
   addComment,
   addSpotPhoto,
-  isWatchingApi,
   toggleWatchApi,
-  createSpot,
-  fetchStatus,
-  fetchSavedSpots,
-  saveSpot,
-  unsaveSpot,
+  toggleSaveApi,
 } from "@/lib/api-client";
 import type { Review, ReviewComment, SpotPhoto } from "@/lib/types";
+import type { MapData } from "@/lib/api-client";
 
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
@@ -89,7 +82,7 @@ export function MapsHomePage() {
   const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
   const tiles = tileLayer(theme, mapStyle);
   const { userId } = useAuth();
-  const { maps, activeMap, selectMap, spots, spotsLoading, reloadSpots } =
+  const { maps, activeMap, selectMap, spots, spotsLoading, addSpot, mapData, patchMapData } =
     useMapData();
   const [mapCenter, setMapCenter] = useState<[number, number]>(CENTER);
   const [mapZoom, setMapZoom] = useState(ZOOM);
@@ -116,39 +109,47 @@ export function MapsHomePage() {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<[number, number] | null>(null);
   const [newName, setNewName] = useState("");
+  const [addError, setAddError] = useState("");
   const flyTargetRef = useRef<[number, number] | null>(null);
 
-  const loadBundle = useCallback(
-    async (spot: Spot) => {
-      const [revs, photos] = await Promise.all([
-        fetchReviews(spot._id as string),
-        fetchPhotos(spot._id as string),
-      ]);
-      const reviews = await Promise.all(
-        revs.map(async (r) => {
-          const comments = await fetchComments(r._id as string);
-          return {
-            ...r,
-            author: r.user_fk ? `User ${r.user_fk.slice(0, 6)}` : "Anonymous",
-            comments: comments.map((c) => ({
-              ...c,
-              author: c.user_fk ? `User ${c.user_fk.slice(0, 6)}` : "Anonymous",
-            })),
-          };
-        })
-      );
-      const savedEntries = userId ? await fetchSavedSpots(userId) : [];
-      setBundle({ reviews, photos });
-      setStatusState(await fetchStatus(spot._id as string));
-      setWatching(await isWatchingApi(spot._id as string, userId));
-      setSaved(savedEntries.some((e) => String(e.spotId) === String(spot._id)));
-    },
-    [userId]
-  );
+  const loadBundle = (spot: Spot, data: MapData): DetailBundle => {
+    const reviews = data.reviews
+      .filter((r) => r.spotId === spot._id)
+      .map((r) => ({
+        ...r,
+        author: r.user_fk ? `User ${r.user_fk.slice(0, 6)}` : "Anonymous",
+        comments: data.comments
+          .filter((c) => c.reviewId === r._id)
+          .map((c) => ({
+            ...c,
+            author: c.user_fk ? `User ${c.user_fk.slice(0, 6)}` : "Anonymous",
+          })),
+      }));
+    return {
+      reviews,
+      photos: data.photos.filter((p) => p.spotId === spot._id),
+    };
+  };
 
   useEffect(() => {
-    if (selected) loadBundle(selected);
-  }, [selected, loadBundle]);
+    const current = selected
+      ? mapData.spots.find((s) => s._id === selected._id) ?? selected
+      : null;
+    setBundle(current ? loadBundle(current, mapData) : null);
+    setStatusState(current?.status ?? "unknown");
+    setWatching(
+      Boolean(
+        current &&
+          mapData.watches.some((w) => String(w.spotId) === String(current._id))
+      )
+    );
+    setSaved(
+      Boolean(
+        current &&
+          mapData.saved.some((e) => String(e.spotId) === String(current._id))
+      )
+    );
+  }, [selected, mapData]);
 
   const openSpot = (spot: Spot) => {
     setSelected(spot);
@@ -157,47 +158,71 @@ export function MapsHomePage() {
 
   const handleSaveReview = async () => {
     if (!selected || !selected._id) return;
-    await addReview(selected._id, reviewScore, reviewText, userId);
+    const created = await addReview(selected._id, reviewScore, reviewText, userId);
+    if (created) patchMapData((d) => ({ ...d, reviews: [created, ...d.reviews] }));
     setReviewText("");
     setReviewScore(3);
-    await reloadDetails(selected);
-  };
-
-  const reloadDetails = async (spot: Spot) => {
-    setBundle(null);
-    await loadBundle(spot);
   };
 
   const handleStatus = async (s: SpotStatus) => {
     if (!selected?._id) return;
     await setStatus(selected._id, s);
-    setStatusState(s);
+    patchMapData((d) => ({
+      ...d,
+      spots: d.spots.map((sp) => (sp._id === selected._id ? { ...sp, status: s } : sp)),
+    }));
   };
 
   const handleWatch = async () => {
-    if (!selected?._id) return;
-    const now = await toggleWatchApi(selected._id, userId);
-    setWatching(now);
+    if (!selected?._id || !userId) return;
+    const spotId = selected._id;
+    const now = await toggleWatchApi(spotId, userId);
+    patchMapData((d) =>
+      now
+        ? {
+            ...d,
+            watches: [
+              ...d.watches.filter((w) => String(w.spotId) !== String(spotId)),
+              { userId, spotId },
+            ],
+          }
+        : {
+            ...d,
+            watches: d.watches.filter((w) => String(w.spotId) !== String(spotId)),
+          }
+    );
   };
 
   const handleSave = async () => {
     if (!selected?._id || !userId) return;
-    if (saved) {
-      await unsaveSpot(selected._id, userId);
-    } else {
-      await saveSpot(selected._id, "", userId);
-    }
-    setSaved(!saved);
+    const spotId = selected._id;
+    const on = await toggleSaveApi(spotId, userId);
+    patchMapData((d) =>
+      on
+        ? {
+            ...d,
+            saved: [
+              ...d.saved.filter((e) => String(e.spotId) !== String(spotId)),
+              { userId, spotId, note: "" },
+            ],
+          }
+        : {
+            ...d,
+            saved: d.saved.filter((e) => String(e.spotId) !== String(spotId)),
+          }
+    );
   };
 
   const handleVote = async (reviewId: string) => {
     await toggleHelpfulReview(reviewId, userId);
-    if (selected) reloadDetails(selected);
   };
 
   const handleEditReview = async (reviewId: string, review: string, score: number) => {
     await updateReview(reviewId, review, score);
-    if (selected) reloadDetails(selected);
+    patchMapData((d) => ({
+      ...d,
+      reviews: d.reviews.map((r) => (r._id === reviewId ? { ...r, review, score } : r)),
+    }));
     setEditing(null);
   };
 
@@ -205,15 +230,19 @@ export function MapsHomePage() {
 
   const handleDeleteReview = async (reviewId: string) => {
     await deleteReview(reviewId);
-    if (selected) reloadDetails(selected);
+    patchMapData((d) => ({
+      ...d,
+      reviews: d.reviews.filter((r) => r._id !== reviewId),
+      comments: d.comments.filter((c) => c.reviewId !== reviewId),
+    }));
   };
 
   const handleComment = async (reviewId: string) => {
     const text = commentDrafts[reviewId]?.trim();
     if (!text) return;
-    await addComment(reviewId, text, userId);
+    const created = await addComment(reviewId, text, userId);
+    if (created) patchMapData((d) => ({ ...d, comments: [...d.comments, created] }));
     setCommentDrafts((d) => ({ ...d, [reviewId]: "" }));
-    if (selected) reloadDetails(selected);
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,8 +250,8 @@ export function MapsHomePage() {
     if (!file || !selected?._id) return;
     const reader = new FileReader();
     reader.onload = async () => {
-      await addSpotPhoto(selected._id as string, String(reader.result), userId);
-      if (selected) reloadDetails(selected);
+      const created = await addSpotPhoto(selected._id as string, String(reader.result), userId);
+      if (created) patchMapData((d) => ({ ...d, photos: [created, ...d.photos] }));
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -230,21 +259,33 @@ export function MapsHomePage() {
 
   const handleAddSpot = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    setAddError("");
+    if (!userId) {
+      setAddError("You must be signed in to add a spot.");
+      return;
+    }
     if (!activeMap || !draft || !newName.trim()) return;
-    await createSpot({
-      mapId: activeMap._id,
-      name: newName.trim(),
-      street: "",
-      city: "",
-      zip: 0,
-      lat: draft[0],
-      lng: draft[1],
-      createdBy: userId,
-    });
-    setNewName("");
-    setAdding(false);
-    setDraft(null);
-    reloadSpots();
+    try {
+      await addSpot({
+        mapId: activeMap._id,
+        name: newName.trim(),
+        street: "",
+        city: "",
+        zip: 0,
+        lat: draft[0],
+        lng: draft[1],
+        createdBy: userId,
+      });
+      setNewName("");
+      setAdding(false);
+      setDraft(null);
+    } catch (err) {
+      setAddError(
+        (err as Error).message?.includes("not-configured")
+          ? "The database is not configured. Check MONGODB_URI / MONGODB_TIMEOUT_MS."
+          : (err as Error).message || "Could not add spot. The database may be unreachable."
+      );
+    }
   };
 
   const copyViewLink = async () => {
@@ -298,10 +339,31 @@ export function MapsHomePage() {
         id="add-fab"
         type="button"
         className={adding ? "cancel" : ""}
-        onClick={() => setAdding((a) => !a)}
+        disabled={maps.length === 0}
+        onClick={() => {
+          setAddError("");
+          if (!userId) {
+            setAddError("You must be signed in to add a spot.");
+            return;
+          }
+          setAdding((a) => !a);
+        }}
+        title={maps.length === 0 ? "Create a map first (Map Admin) to add spots" : undefined}
       >
         {adding ? "Cancel" : "Add spot"}
       </button>
+
+      {maps.length === 0 && !adding && (
+        <div id="map-note">
+          No maps available yet. Create your first map from <a href="/admin">Map Admin</a>.
+        </div>
+      )}
+
+      {addError && (
+        <div id="map-note-error">
+          <strong>Could not add spot:</strong> {addError}
+        </div>
+      )}
 
       <div id="map-controls">
         <select

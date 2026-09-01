@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   fetchAdminMaps,
   fetchAdminSpots,
+  createMap,
   moderateSpot,
   setSpotHidden,
   updateSpotFields,
@@ -16,6 +17,7 @@ import type { Spot } from "@/lib/types";
 import {
   IconCheck,
   IconMapMarker,
+  IconPlus,
   IconTrash,
   IconX,
 } from "./icons";
@@ -39,6 +41,31 @@ export function AdminPanel() {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [confirmDestroy, setConfirmDestroy] = useState<Spot | null>(null);
 
+  const [creating, setCreating] = useState(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createPublic, setCreatePublic] = useState<"public" | "private">("public");
+  const [createError, setCreateError] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+
+  const loadMaps = useCallback(async () => {
+    setLoadingMaps(true);
+    try {
+      const res = await fetchAdminMaps();
+      setMaps(res.maps);
+      setIsAdmin(res.isAdmin);
+      setLoadingMaps(false);
+      if (res.maps.length > 0) {
+        setActiveMap((prev) =>
+          prev && res.maps.some((m) => m._id === prev._id) ? prev : res.maps[0]
+        );
+      }
+    } catch {
+      setMapsError("Could not load your maps. Are you a map owner?");
+      setLoadingMaps(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -60,6 +87,28 @@ export function AdminPanel() {
       active = false;
     };
   }, [user]);
+
+  const handleCreateMap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createTitle.trim() || createBusy) return;
+    setCreateBusy(true);
+    setCreateError("");
+    try {
+      await createMap({
+        title: createTitle.trim(),
+        description: createDesc.trim() || undefined,
+        isPublic: createPublic,
+      });
+      setCreateTitle("");
+      setCreateDesc("");
+      setCreating(false);
+      await loadMaps();
+    } catch (err) {
+      setCreateError((err as Error).message || "Failed to create map.");
+    } finally {
+      setCreateBusy(false);
+    }
+  };
 
   const loadSpots = useCallback(async (mapId: string) => {
     setLoadingSpots(true);
@@ -145,9 +194,55 @@ export function AdminPanel() {
         <div className="admin-head">
           <h1>Map Admin</h1>
           <p className="muted">
-            Moderate spot submissions, hide content, edit details and remove spots.
+            Create maps, moderate spot submissions, hide content, edit details and remove spots.
           </p>
+          <button
+            type="button"
+            className="action-btn admin-create-btn"
+            onClick={() => {
+              setCreating((c) => !c);
+              setCreateError("");
+            }}
+          >
+            <IconPlus size={16} /> {creating ? "Cancel" : "Create map"}
+          </button>
         </div>
+
+        {creating && (
+          <form className="admin-create-map" onSubmit={handleCreateMap}>
+            <h3>Create a new map</h3>
+            <label className="admin-field">
+              <span>Title</span>
+              <input
+                value={createTitle}
+                onChange={(e) => setCreateTitle(e.target.value)}
+                placeholder="e.g. Best Coffee in Copenhagen"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Description (optional)</span>
+              <input
+                value={createDesc}
+                onChange={(e) => setCreateDesc(e.target.value)}
+                placeholder="What is this map about?"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Visibility</span>
+              <select
+                value={createPublic}
+                onChange={(e) => setCreatePublic(e.target.value as "public" | "private")}
+              >
+                <option value="public">Public — anyone can view</option>
+                <option value="private">Private — owner only</option>
+              </select>
+            </label>
+            {createError && <p className="auth-error">{createError}</p>}
+            <button type="submit" className="action-btn" disabled={createBusy || !createTitle.trim()}>
+              {createBusy ? "Creating…" : "Create map"}
+            </button>
+          </form>
+        )}
 
         {loadingMaps ? (
           <p className="muted">Loading your maps…</p>

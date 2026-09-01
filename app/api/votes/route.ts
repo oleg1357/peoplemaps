@@ -20,15 +20,20 @@ export async function GET(req: Request) {
   });
 }
 
+// POST /api/votes -> { reviewId, userId?, on? }. Toggles when `on` is omitted,
+// so a signed-in user's click is a single request. Returns { count, voted }.
 export async function POST(req: Request) {
   const ctx = await getOptionalContext(req);
   const body = await req.json();
   const reviewId = body.reviewId;
   const userId = body.userId ?? ctx.userId;
   if (!reviewId || !userId) return error("Missing reviewId or userId");
-  const on = Boolean(body.on);
   return withDb(async (db) => {
     const col = db.collection<ReviewVote>(COLLECTIONS.votes);
+    const on =
+      body.on !== undefined
+        ? Boolean(body.on)
+        : !(await col.findOne({ reviewId, userId }));
     if (on) {
       await col.updateOne(
         { reviewId, userId },

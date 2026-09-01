@@ -26,6 +26,8 @@ interface AuthContextValue {
     email: string,
     password: string
   ) => { ok: boolean; message: string };
+  loginWithGoogle: () => { ok: boolean; message: string };
+  authError: string | null;
   logout: () => void;
   usingSupabase: boolean;
 }
@@ -62,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserIdState] = useState<string | null>(null);
   const [sbUserId, setSbUserId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const usingSupabase = supabaseConfigured;
 
@@ -102,20 +105,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback<AuthContextValue["login"]>((email, password) => {
     if (usingSupabase) {
-      // Fire async; UI callers treat it as ok until a session event updates state.
-      supabase!.auth.signInWithPassword({ email, password }).then(({ error }) => {
+      supabase!.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
         if (error) {
-          setSbUserId(null);
+          setAuthError(error.message);
+        } else if (data.session) {
+          setSbUserId(data.session.user.id);
+          router.push("/");
         }
       });
-      return supabaseUILogin();
+      return { ok: true, message: "Signing in…" };
     }
     const res = doLogin(email, password);
     if (res.ok && res.userId) {
       setUserIdState(String(res.userId));
     }
     return res;
-  }, [usingSupabase]);
+  }, [usingSupabase, router]);
 
   const signup = useCallback<AuthContextValue["signup"]>((firstName, lastName, email, password) => {
     if (usingSupabase) {
@@ -125,21 +130,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password,
           options: {
             data: { first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim() },
-            emailRedirectTo: window.location.origin + "/login",
+            emailRedirectTo: `${window.location.origin}/login`,
           },
         })
-        .then(({ error }) => {
+        .then(({ data, error }) => {
           if (error) {
-            setSbUserId(null);
+            setAuthError(error.message);
+            return;
           }
+          if (data.session) {
+            // Confirmation disabled → a session is returned immediately, so the
+            // user is signed in right after registration.
+            setSbUserId(data.session.user.id);
+            router.push("/");
+            return;
+          }
+          // Confirmation still enabled → attempt a direct sign-in anyway.
+          supabase!.auth.signInWithPassword({ email, password }).then(({ data: loginData, error: loginErr }) => {
+            if (!loginErr && loginData.session) {
+              setSbUserId(loginData.session.user.id);
+              router.push("/");
+            } else {
+              setAuthError("Please confirm your email, then log in.");
+            }
+          });
         });
-      return { ok: true, message: "Check your email to confirm your account" };
+      return { ok: true, message: "Creating your account…" };
     }
     const res = doSignup(firstName, lastName, email, password);
     if (res.ok) {
       setUserIdState(getLoggedInUserId());
     }
     return res;
+  }, [usingSupabase, router]);
+
+  const loginWithGoogle = useCallback<AuthContextValue["loginWithGoogle"]>(() => {
+    if (!usingSupabase) {
+      return { ok: false, message: "Google login is unavailable in demo mode." };
+    }
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+    supabase!.auth
+      .signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${origin}/login/callback`,
+        },
+      })
+      .then(({ error }) => {
+        if (error) {
+          setAuthError(error.message || "Google login failed. Please try again.");
+        }
+      });
+    return { ok: true, message: "Redirecting to Google…" };
   }, [usingSupabase]);
 
   const logout = useCallback(() => {
@@ -158,19 +201,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userId: activeUserId,
       login,
       signup,
+      loginWithGoogle,
+      authError,
       logout,
       usingSupabase,
     }),
-    [usingSupabase, sbUserId, demoUser, activeUserId, login, signup, logout]
+    [usingSupabase, sbUserId, demoUser, activeUserId, login, signup, loginWithGoogle, authError, logout]
   );
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
-}
-
-function supabaseUILogin(): { ok: boolean; message: string } {
-  return { ok: true, message: "Signing in…" };
 }
 
 export function useAuth(): AuthContextValue {

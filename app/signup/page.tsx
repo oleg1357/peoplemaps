@@ -8,7 +8,7 @@ import { PeopleMapsLogo } from "@/components/Logo";
 import { PageMeta } from "@/components/PageMeta";
 
 export default function SignupPage() {
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle, authError, usingSupabase } = useAuth();
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -16,13 +16,21 @@ export default function SignupPage() {
   const [userPassword, setUserPassword] = useState("");
   const [error, setError] = useState("");
 
+  const effectiveError = authError || error;
+
   const submit = () => {
+    setError("");
     const res = signup(firstName, lastName, email, userPassword);
     if (!res.ok) {
       setError(res.message);
-    } else {
+    } else if (!usingSupabase) {
       router.push("/");
     }
+  };
+
+  const google = () => {
+    setError("");
+    loginWithGoogle();
   };
 
   return (
@@ -60,10 +68,26 @@ export default function SignupPage() {
               value={userPassword}
               onChange={(e) => setUserPassword(e.target.value)}
             />
-            {error && <p className="auth-error">{error}</p>}
+            {error && <p className="auth-error">{effectiveError}</p>}
             <div>
               <button className="action-btn" onClick={submit}>
                 Sign up
+              </button>
+            </div>
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+            <div>
+              <button className="action-btn2 google-btn" onClick={google}>
+                Continue with Google
+              </button>
+            </div>
+            <div>
+              <button
+                className="action-btn2"
+                onClick={() => router.push("/login")}
+              >
+                Already have an account? Log in
               </button>
             </div>
           </div>

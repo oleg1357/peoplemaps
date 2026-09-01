@@ -13,6 +13,8 @@ function getClient(): MongoClient | null {
   const client = new MongoClient(uri as string, {
     // Next.js dev hot-reload shares the client across modules
     maxPoolSize: 10,
+    // Fail fast when the database is unreachable instead of hanging ~30s.
+    serverSelectionTimeoutMS: Number(process.env.MONGODB_TIMEOUT_MS || 2500),
   });
   globalForMongo._mongoClient = client;
   return client;
@@ -20,14 +22,27 @@ function getClient(): MongoClient | null {
 
 let cachedDb: Db | null = null;
 
+// Last known connection failure; requests short-circuit for a short window so
+// degraded calls (e.g. admin map list) fail fast instead of waiting the full
+// server-selection timeout on every request.
+let dbDownUntil = 0;
+const DB_DOWN_WINDOW_MS = 30_000;
+
 export async function getDb(): Promise<Db | null> {
   if (!mongoConfigured) return null;
+  if (Date.now() < dbDownUntil) throw new Error("Database is unreachable.");
   if (cachedDb) return cachedDb;
   const client = getClient();
   if (!client) return null;
-  await client.connect();
-  cachedDb = client.db(dbName);
-  return cachedDb;
+  try {
+    await client.connect();
+    cachedDb = client.db(dbName);
+    dbDownUntil = 0;
+    return cachedDb;
+  } catch (err) {
+    dbDownUntil = Date.now() + DB_DOWN_WINDOW_MS;
+    throw err;
+  }
 }
 
 // Collection name helpers (kept in one place).

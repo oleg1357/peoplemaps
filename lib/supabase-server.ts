@@ -6,7 +6,8 @@ export async function getServerSupabase() {
   if (!supabaseConfigured) return null;
   const cookieStore = await cookies();
   const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-  const envAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+  const envAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) as string;
 
   return createServerClient(envUrl, envAnonKey, {
     cookies: {
