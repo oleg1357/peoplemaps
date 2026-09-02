@@ -20,14 +20,15 @@ export async function GET(req: Request) {
   });
 }
 
-// POST /api/votes -> { reviewId, userId?, on? }. Toggles when `on` is omitted,
-// so a signed-in user's click is a single request. Returns { count, voted }.
+// POST /api/votes -> { reviewId, on?:boolean } toggles helpful vote. Identity
+// always comes from the session cookie, never the request body.
 export async function POST(req: Request) {
   const ctx = await getOptionalContext(req);
+  const userId = ctx.userId;
+  if (!userId) return error("You must be signed in to vote.", 401);
   const body = await req.json();
   const reviewId = body.reviewId;
-  const userId = body.userId ?? ctx.userId;
-  if (!reviewId || !userId) return error("Missing reviewId or userId");
+  if (!reviewId) return error("Missing reviewId");
   return withDb(async (db) => {
     const col = db.collection<ReviewVote>(COLLECTIONS.votes);
     const on =

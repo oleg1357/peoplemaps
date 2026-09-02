@@ -10,11 +10,13 @@ import {
   type ReactNode,
 } from "react";
 import { useMaps } from "@/sanity/lib/maps";
-import type { MapDocument, Spot } from "@/lib/types";
+import type { MapDocument, Spot, Zone, Route } from "@/lib/types";
 import {
   fetchMapData,
   createSpot,
   deleteSpot,
+  createZone,
+  createRoute,
   backendLive,
   type MapData,
 } from "@/lib/api-client";
@@ -28,11 +30,15 @@ interface MapContextValue {
   registerMap: (map: MapDocument) => void;
   mapData: MapData;
   spots: Spot[];
+  zones: Zone[];
+  routes: Route[];
   spotsLoading: boolean;
   reloadMapData: () => void;
   patchMapData: (fn: (d: MapData) => MapData) => void;
   addSpot: (input: Omit<Spot, "_id" | "createdAt">) => Promise<Spot | null>;
   removeSpot: (spotId: string) => Promise<void>;
+  addZone: (input: Omit<Zone, "_id" | "createdAt">) => Promise<{ zone: Zone; zones: Zone[] }>;
+  addRoute: (input: Omit<Route, "_id" | "createdAt">) => Promise<{ route: Route; routes: Route[] }>;
 }
 
 const MapContext = createContext<MapContextValue | null>(null);
@@ -42,6 +48,8 @@ const EMPTY_DATA: MapData = {
   reviews: [],
   comments: [],
   photos: [],
+  zones: [],
+  routes: [],
 };
 
 export function MapProvider({ children }: { children: ReactNode }) {
@@ -117,6 +125,24 @@ export function MapProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const addZone = useCallback(
+    async (input: Omit<Zone, "_id" | "createdAt">) => {
+      const res = await createZone(input);
+      setMapData((prev) => ({ ...prev, zones: res.zones }));
+      return res;
+    },
+    []
+  );
+
+  const addRoute = useCallback(
+    async (input: Omit<Route, "_id" | "createdAt">) => {
+      const res = await createRoute(input);
+      setMapData((prev) => ({ ...prev, routes: res.routes }));
+      return res;
+    },
+    []
+  );
+
   const removeSpot = useCallback(async (spotId: string) => {
     try {
       await deleteSpot(spotId);
@@ -149,13 +175,17 @@ export function MapProvider({ children }: { children: ReactNode }) {
       registerMap,
       mapData,
       spots: mapData.spots,
+      zones: mapData.zones,
+      routes: mapData.routes,
       spotsLoading,
       reloadMapData,
       patchMapData,
       addSpot,
       removeSpot,
+      addZone,
+      addRoute,
     }),
-    [maps, mapsLoading, activeMap, selectMap, registerMap, mapData, spotsLoading, reloadMapData, patchMapData, addSpot, removeSpot]
+    [maps, mapsLoading, activeMap, selectMap, registerMap, mapData, spotsLoading, reloadMapData, patchMapData, addSpot, removeSpot, addZone, addRoute]
   );
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;

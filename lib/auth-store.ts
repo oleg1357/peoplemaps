@@ -1,7 +1,6 @@
 // Auth persistence + demo-mode (localStorage) auth for the global context.
 // Deliberately leaf and dependency-light: it only touches the users seed
-// (lib/auth-data), never the heavier demo data layer (lib/store, lib/data), so
-// the shared client bundle doesn't ship seed places/reviews to every visitor.
+// (lib/auth-data), so the shared client bundle stays small.
 
 import { INITIAL_USERS, type AuthUser } from "./auth-data";
 

@@ -782,6 +782,176 @@
   filter: grayscale(0.4);
 }
 
+/* Add zone / route FABs share the spot FAB's look but sit above it. */
+.draw-fab {
+  position: absolute;
+  z-index: 9998;
+  bottom: 88px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--glass);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.15s ease, transform 0.05s ease, filter 0.15s ease;
+}
+
+.draw-fab:hover {
+  filter: brightness(1.04);
+  background: var(--surface-2);
+}
+
+.draw-fab:active {
+  transform: translateY(1px);
+}
+
+.draw-fab.cancel {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--danger-2);
+}
+
+.draw-fab.cancel:hover {
+  background: rgba(224, 90, 90, 0.12);
+}
+
+.draw-fab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
+#add-route-fab {
+  bottom: 152px;
+}
+
+/* Shared floating card used by both the add-spot form and the zone/route draw form. */
+.map-draw-card {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 16px;
+  border-radius: 0;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, 90vw);
+  z-index: 1000;
+}
+
+.map-draw-card > strong {
+  font-size: 15px;
+}
+
+.map-draw-card .draw-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.map-draw-card input[type="text"],
+.map-draw-card input[type="color"] {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font);
+  padding: 10px 12px;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.map-draw-card input[type="text"]:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(97, 198, 122, 0.2);
+  background: var(--surface);
+}
+
+.map-draw-card input[type="text"]::placeholder {
+  color: var(--muted);
+}
+
+.map-draw-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.map-draw-actions .link-btn {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.map-draw-actions .link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.map-draw-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-draw-color .color-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.map-draw-color input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.map-draw-color input[type="text"] {
+  width: 92px;
+  font-family: monospace;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.draw-error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+[data-theme="dark"] .draw-fab {
+  background: rgba(27, 34, 32, 0.85);
+}
+
+[data-theme="dark"] .draw-fab:hover {
+  background: rgba(27, 34, 32, 1);
+}
+
+/* Crosshair cursor + subtle tint while actively drawing a zone/route. */
+.map-container.drawing .leaflet-container {
+  cursor: crosshair;
+}
+
+.map-container.drawing .leaflet-container .leaflet-interactive {
+  cursor: crosshair;
+}
+
 #map-note,
 #map-note-error {
   position: absolute;

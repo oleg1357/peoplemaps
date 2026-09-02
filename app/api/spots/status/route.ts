@@ -1,5 +1,5 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
+import { withDb, json, error, toObjectId, byIdFilter, getOptionalContext } from "@/lib/api";
 import type { Spot } from "@/lib/types";
 
 // GET /api/spots/status?spotId=<id>
@@ -17,6 +17,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Identity always comes from the session cookie, never the request body.
+  const ctx = await getOptionalContext(req);
+  if (!ctx.userId) {
+    return error("You must be signed in to update a spot's status.", 401);
+  }
   const body = await req.json();
   const status = body.status;
   if (!body.spotId) return error("Missing spotId");

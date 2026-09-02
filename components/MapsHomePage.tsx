@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, useMap, Polygon, Polyline, Circle, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -19,8 +19,10 @@ import {
   addComment,
   deleteComment,
   addSpotPhoto,
+  fetchPhotos,
+  backendLive,
 } from "@/lib/api-client";
-import type { Review, ReviewComment, SpotPhoto } from "@/lib/types";
+import type { Review, ReviewComment, SpotPhoto, SpotPhotoMeta } from "@/lib/types";
 import type { MapData } from "@/lib/api-client";
 
 const CENTER: [number, number] = [55.6761, 12.5683];
@@ -92,7 +94,7 @@ function FlyToView({
 
 interface DetailBundle {
   reviews: Array<Review & { author: string; comments: Array<ReviewComment & { author: string }> }>;
-  photos: SpotPhoto[];
+  photos: SpotPhotoMeta[];
 }
 
 export function MapsHomePage({
@@ -106,7 +108,7 @@ export function MapsHomePage({
   const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
   const tiles = tileLayer(theme, mapStyle);
   const { userId, user } = useAuth();
-  const { maps, activeMap, selectMap, spots, spotsLoading, addSpot, mapData, patchMapData } =
+  const { maps, activeMap, selectMap, spots, spotsLoading, addSpot, mapData, patchMapData, zones, routes, addZone, addRoute } =
     useMapData();
   const router = useRouter();
   const [mapCenter, setMapCenter] = useState<[number, number]>(
@@ -131,6 +133,10 @@ export function MapsHomePage({
   const [status, setStatusState] = useState<SpotStatus>("unknown");
   const [reviewText, setReviewText] = useState("");
   const [reviewScore, setReviewScore] = useState(3);
+  // Loaded photo bytes for a spot, keyed by spot id. Kept outside the bundle so
+  // a lazy fetch doesn't clobber the reviews/comments already on screen.
+  const [spotPhotos, setSpotPhotos] = useState<Record<string, SpotPhoto[]>>({});
+  const [photosLoading, setPhotosLoading] = useState(false);
   // Reply drafts are keyed `${reviewId}:${parentCommentId}` ("root" = reply to
   // the review itself). replyTarget is the comment currently being replied to.
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -144,7 +150,25 @@ export function MapsHomePage({
   const [newMarker, setNewMarker] = useState<string | null>(null);
   const [newMarkerColor, setNewMarkerColor] = useState<string | null>(null);
   const [addError, setAddError] = useState("");
+  // Zone/route drawing state.
+  const [drawMode, setDrawMode] = useState<"zone" | "route" | null>(null);
+  const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
+  const [drawName, setDrawName] = useState("");
+  const [drawDesc, setDrawDesc] = useState("");
+  const [drawColor, setDrawColor] = useState<string>(DEFAULT_MARKER.color);
+  const [drawError, setDrawError] = useState("");
   const flyTargetRef = useRef<[number, number] | null>(null);
+
+  // Reset drawing whenever the active map changes.
+  useEffect(() => {
+    setDrawMode(null);
+    setDrawPoints([]);
+    setDrawName("");
+    setDrawDesc("");
+    setDrawError("");
+    setAdding(false);
+    setDraft(null);
+  }, [activeMap?._id]);
 
   const pickMarkerEmoji =
     newMarker ?? activeMap?.defaultMarker ?? DEFAULT_MARKER.emoji;
@@ -182,6 +206,31 @@ export function MapsHomePage({
     setBundle(current ? loadBundle(current, mapData) : null);
     setStatusState(current?.status ?? "unknown");
   }, [selected, mapData]);
+
+  // Photo bytes are NOT in mapData (metadata only). Fetch them per spot the
+  // first time its details open, then reuse the cache. Demo mode already has
+  // the bytes, so only the live backend fetches on demand.
+  useEffect(() => {
+    if (!backendLive || !selected?._id) return;
+    if (spotPhotos[selected._id]) return;
+    const spotId = selected._id;
+    let cancelled = false;
+    setPhotosLoading(true);
+    fetchPhotos(spotId)
+      .then((arr) => {
+        if (cancelled) return;
+        setSpotPhotos((prev) => ({ ...prev, [spotId]: arr }));
+      })
+      .catch(() => {
+        // ignore — the spot just shows no photos
+      })
+      .finally(() => {
+        if (!cancelled) setPhotosLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, spotPhotos]);
 
   const openSpot = (spot: Spot) => {
     setSelected(spot);
@@ -273,10 +322,101 @@ export function MapsHomePage({
     const reader = new FileReader();
     reader.onload = async () => {
       const created = await addSpotPhoto(selected._id as string, String(reader.result), userId);
-      if (created) patchMapData((d) => ({ ...d, photos: [created, ...d.photos] }));
+      if (created) {
+        setSpotPhotos((prev) => ({
+          ...prev,
+          [selected._id as string]: [created, ...(prev[selected._id as string] ?? [])],
+        }));
+        patchMapData((d) => ({
+          ...d,
+          photos: [created, ...d.photos],
+        }));
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = "";
+  };
+
+  const startDraw = (mode: "zone" | "route") => {
+    // Drawing and spot-adding are mutually exclusive.
+    setAdding(false);
+    setDraft(null);
+    setAddError("");
+    setDrawError("");
+    setDrawName("");
+    setDrawDesc("");
+    setDrawPoints((pts) => (drawMode === mode ? [] : pts));
+    setDrawMode((m) => (m === mode ? null : mode));
+  };
+
+  const cancelDraw = () => {
+    setDrawMode(null);
+    setDrawPoints([]);
+    setDrawName("");
+    setDrawDesc("");
+    setDrawError("");
+  };
+
+  const handleDrawPlace = (p: [number, number]) => {
+    setDrawPoints((pts) => [...pts, p]);
+  };
+
+  const handleUndoPoint = () => {
+    setDrawPoints((pts) => pts.slice(0, -1));
+  };
+
+  const saveDraw = async (type: "zone" | "route") => {
+    setDrawError("");
+    const name = drawName.trim();
+    if (!name) {
+      setDrawError(type === "zone" ? "Give the zone a name." : "Give the route a name.");
+      return;
+    }
+    const minPoints = type === "zone" ? 3 : 2;
+    if (drawPoints.length < minPoints) {
+      setDrawError(
+        type === "zone"
+          ? "Click at least 3 points on the map to close the zone."
+          : "Click at least 2 points on the map to draw the route."
+      );
+      return;
+    }
+    if (!userId) {
+      setDrawError("You must be signed in to add a " + type + ".");
+      return;
+    }
+    if (!activeMap) {
+      setDrawError("No map selected. Pick a map from the dropdown before adding a " + type + ".");
+      return;
+    }
+    try {
+      if (type === "zone") {
+        await addZone({
+          mapId: activeMap._id,
+          name,
+          shape: "polygon",
+          points: drawPoints,
+          color: drawColor,
+          description: drawDesc.trim() || null,
+        });
+      } else {
+        await addRoute({
+          mapId: activeMap._id,
+          name,
+          points: drawPoints,
+          color: drawColor,
+          description: drawDesc.trim() || null,
+        });
+      }
+      cancelDraw();
+    } catch (err) {
+      console.error("saveDraw failed:", err);
+      setDrawError(
+        (err as Error).message?.includes("not-configured")
+          ? "The database is not configured. Check MONGODB_URI / MONGODB_TIMEOUT_MS."
+          : (err as Error).message || `Could not add ${type}. The database may be unreachable.`
+      );
+    }
   };
 
   const handleAddSpot = async (ev: React.FormEvent) => {
@@ -369,7 +509,7 @@ export function MapsHomePage({
   };
 
   return (
-    <div className="map-container">
+    <div className={`map-container ${drawMode ? "drawing" : ""}`}>
       {maps.length > 0 && (
         <div id="map-buttons" className="buttons" style={{ top: "calc(var(--header-h) + 6px)" }}>
           <select
@@ -409,6 +549,7 @@ export function MapsHomePage({
         disabled={maps.length === 0}
         onClick={() => {
           setAddError("");
+          cancelDraw();
           if (!userId) {
             setAddError("You must be signed in to add a spot.");
             return;
@@ -418,6 +559,28 @@ export function MapsHomePage({
         title={maps.length === 0 ? "Create a map first (Map Admin) to add spots" : undefined}
       >
         {adding ? "Cancel" : "Add spot"}
+      </button>
+
+      <button
+        id="add-zone-fab"
+        type="button"
+        className={`draw-fab ${drawMode === "zone" ? "cancel" : ""}`}
+        disabled={maps.length === 0}
+        onClick={() => startDraw("zone")}
+        title={maps.length === 0 ? "Create a map first (Map Admin) to add zones" : "Draw a zone (area) on the map"}
+      >
+        {drawMode === "zone" ? "✕ Cancel" : "Add zone"}
+      </button>
+
+      <button
+        id="add-route-fab"
+        type="button"
+        className={`draw-fab ${drawMode === "route" ? "cancel" : ""}`}
+        disabled={maps.length === 0}
+        onClick={() => startDraw("route")}
+        title={maps.length === 0 ? "Create a map first (Map Admin) to add routes" : "Draw a route (path) on the map"}
+      >
+        {drawMode === "route" ? "✕ Cancel" : "Add route"}
       </button>
 
       {maps.length === 0 && !adding && (
@@ -554,7 +717,7 @@ export function MapsHomePage({
                             Reply
                           </button>
                         )}
-                        {r._id && (
+                        {r._id && Boolean(userId) && r.user_fk === userId && (
                           <button
                             type="button"
                             className="link-btn"
@@ -563,7 +726,7 @@ export function MapsHomePage({
                             Edit
                           </button>
                         )}
-                        {r._id && (
+                        {r._id && Boolean(userId) && r.user_fk === userId && (
                           <button type="button" className="link-btn danger" onClick={() => handleDeleteReview(r._id!)}>
                             Delete
                           </button>
@@ -745,9 +908,21 @@ export function MapsHomePage({
 
             <h3 style={{ marginTop: 16 }}>Photos ({bundle.photos.length})</h3>
             <div className="photos-grid">
-              {bundle.photos.map((p) => (
-                <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
-              ))}
+              {(() => {
+                if (backendLive) {
+                  const loaded = selected?._id ? spotPhotos[selected._id] ?? [] : [];
+                  if (loaded.length === 0 && photosLoading) {
+                    return <span className="italic">Loading photos…</span>;
+                  }
+                  return loaded.map((p) => (
+                    <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
+                  ));
+                }
+                // Demo mode: mapData.photos already carry the image bytes.
+                return (bundle.photos as SpotPhoto[]).map((p) => (
+                  <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
+                ));
+              })()}
             </div>
             <input type="file" accept="image/*" onChange={handlePhoto} />
           </div>
@@ -763,6 +938,68 @@ export function MapsHomePage({
         />
         {adding && (
           <MapClickHandler onPlace={(p) => setDraft(p)} />
+        )}
+        {drawMode && (
+          <MapClickHandler onPlace={handleDrawPlace} />
+        )}
+        {/* Zones: filled polygons or radius circles */}
+        {zones.map((z) =>
+          z.shape === "circle" && z.center && z.radius ? (
+            <Circle
+              key={z._id}
+              center={z.center}
+              radius={z.radius}
+              pathOptions={{
+                color: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillColor: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillOpacity: 0.15,
+                weight: 2,
+              }}
+            >
+              {(z.name || z.description) && (
+                <Tooltip direction="top" offset={[0, -12]}>
+                  <SpotTooltip name={z.name || "Zone"} hint={z.description || undefined} />
+                </Tooltip>
+              )}
+            </Circle>
+          ) : z.points && z.points.length >= 3 ? (
+            <Polygon
+              key={z._id}
+              positions={z.points}
+              pathOptions={{
+                color: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillColor: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillOpacity: 0.15,
+                weight: 2,
+              }}
+            >
+              {(z.name || z.description) && (
+                <Tooltip direction="top" offset={[0, -12]}>
+                  <SpotTooltip name={z.name || "Zone"} hint={z.description || undefined} />
+                </Tooltip>
+              )}
+            </Polygon>
+          ) : null
+        )}
+        {/* Routes: polylines */}
+        {routes.map((r) =>
+          r.points && r.points.length >= 2 ? (
+            <Polyline
+              key={r._id}
+              positions={r.points}
+              pathOptions={{
+                color: r.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                weight: 3,
+                opacity: 0.8,
+              }}
+            >
+              {(r.name || r.description) && (
+                <Tooltip direction="top" offset={[0, -12]}>
+                  <SpotTooltip name={r.name || "Route"} hint={r.description || undefined} />
+                </Tooltip>
+              )}
+            </Polyline>
+          ) : null
         )}
         {spots.map((s) => {
           const base = resolveMarker(s.marker);
@@ -798,6 +1035,44 @@ export function MapsHomePage({
             </Tooltip>
           </Marker>
         )}
+        {/* Zone/route drawing preview */}
+        {drawMode === "zone" && drawPoints.length === 2 && (
+          <Polyline
+            positions={drawPoints}
+            pathOptions={{ color: drawColor, weight: 2, dashArray: "6 4", opacity: 0.7 }}
+          />
+        )}
+        {drawMode === "zone" && drawPoints.length >= 3 && (
+          <Polygon
+            positions={[...drawPoints, drawPoints[0]]}
+            pathOptions={{
+              color: drawColor,
+              weight: 2,
+              dashArray: "6 4",
+              fillColor: drawColor,
+              fillOpacity: 0.12,
+            }}
+          />
+        )}
+        {drawMode === "route" && drawPoints.length >= 2 && (
+          <Polyline
+            positions={drawPoints}
+            pathOptions={{ color: drawColor, weight: 3, dashArray: "6 4", opacity: 0.8 }}
+          />
+        )}
+        {drawPoints.map((p, i) => (
+          <CircleMarker
+            key={i}
+            center={p}
+            radius={6}
+            pathOptions={{
+              color: "#fff",
+              weight: 2,
+              fillColor: drawColor,
+              fillOpacity: 1,
+            }}
+          />
+        ))}
         {userLocation && !adding && (
           <Marker position={userLocation} icon={userIcon} />
         )}
@@ -809,21 +1084,7 @@ export function MapsHomePage({
       {adding && (
         <form
           onSubmit={handleAddSpot}
-          style={{
-            position: "absolute",
-            bottom: 90,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#fff",
-            padding: 12,
-            borderRadius: 0,
-            boxShadow: "var(--shadow-lg)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            width: "min(360px, 90vw)",
-            zIndex: 1000,
-          }}
+          className="map-draw-card"
         >
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
           {activeMap?.submissionNote && (
@@ -873,6 +1134,69 @@ export function MapsHomePage({
               Save spot
             </button>
           </div>
+        </form>
+      )}
+
+      {drawMode && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveDraw(drawMode as "zone" | "route");
+          }}
+          className="map-draw-card"
+        >
+          <strong>{drawMode === "zone" ? "Add zone" : "Add route"}</strong>
+          <span className="draw-desc">
+            {drawMode === "zone"
+              ? `Click the map to place corners — ${drawPoints.length} placed, need at least 3.`
+              : `Click the map to place points — ${drawPoints.length} placed, need at least 2.`}
+          </span>
+          <div className="map-draw-actions">
+            <button type="button" className="link-btn" onClick={handleUndoPoint} disabled={drawPoints.length === 0}>
+              Undo point
+            </button>
+            <button type="button" className="link-btn" onClick={cancelDraw}>
+              Cancel
+            </button>
+          </div>
+          <input
+            value={drawName}
+            onChange={(e) => setDrawName(e.target.value)}
+            placeholder={`${drawMode === "zone" ? "Zone name" : "Route name"} (required)`}
+          />
+          <input
+            value={drawDesc}
+            onChange={(e) => setDrawDesc(e.target.value)}
+            placeholder="Description (optional)"
+          />
+          <div className="map-draw-color">
+            <span className="color-label">Color</span>
+            <input
+              type="color"
+              value={drawColor}
+              onChange={(e) => setDrawColor(e.target.value)}
+              title="Color"
+            />
+            <input
+              type="text"
+              value={drawColor}
+              onChange={(e) => { if (/^#[0-9a-fA-F]{3,8}$/.test(e.target.value)) setDrawColor(e.target.value); }}
+              pattern="#[0-9a-fA-F]{3,8}"
+              title="Hex color"
+            />
+          </div>
+          {drawError && (
+            <div className="draw-error">
+              <strong>Could not add {drawMode}:</strong> {drawError}
+            </div>
+          )}
+          <button
+            type="submit"
+            className="action-btn2"
+            title={!drawName.trim() ? "Enter a name to save" : undefined}
+          >
+            Save {drawMode}
+          </button>
         </form>
       )}
 

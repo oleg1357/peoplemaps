@@ -60,6 +60,51 @@ export interface SpotPhoto {
   date: string;
 }
 
+// Lightweight photo descriptor used in list payloads (e.g. /api/map-data).
+// The image bytes (`dataUrl`) are not shipped here — they are fetched per spot
+// on demand so maps with many photos stay cheap to load.
+export interface SpotPhotoMeta {
+  _id?: string;
+  spotId: string;
+  date: string;
+}
+
+export type GeoPoint = [number, number];
+
+// A filled area on the map (polygon or circle). Belongs to a Sanity map via mapId.
+export interface Zone {
+  _id?: string;
+  mapId: string; // == Sanity map document _id
+  name: string;
+  // "polygon" uses `points`; "circle" uses `center` + `radius`.
+  shape: "polygon" | "circle";
+  points?: GeoPoint[]; // polygon vertices (lat,lng)
+  center?: GeoPoint; // circle center (lat,lng)
+  radius?: number; // circle radius in meters
+  color?: string | null; // hex fill/stroke color
+  description?: string | null;
+  createdBy?: string | null; // supabase user id
+  createdAt: string;
+  // Moderation mirrors Spot so zones can be approved/rejected/hidden later.
+  moderation?: ModerationStatus;
+  hidden?: boolean;
+}
+
+// A path/route on the map (polyline). Belongs to a Sanity map via mapId.
+export interface Route {
+  _id?: string;
+  mapId: string; // == Sanity map document _id
+  name: string;
+  points: GeoPoint[]; // ordered vertices (lat,lng)
+  color?: string | null; // hex stroke color
+  description?: string | null;
+  createdBy?: string | null; // supabase user id
+  createdAt: string;
+  // Moderation mirrors Spot so routes can be approved/rejected/hidden later.
+  moderation?: ModerationStatus;
+  hidden?: boolean;
+}
+
 export interface ReviewVote {
   _id?: string;
   reviewId: string;

@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     spotId,
     dataUrl: String(body.dataUrl),
     date: new Date().toISOString().slice(0, 10),
-    uploader_fk: body.uploader_fk ?? ctx.userId ?? null,
+    uploader_fk: ctx.userId ?? body.uploader_fk ?? null,
   };
   return withDb(async (db) => {
     const col = db.collection<SpotPhoto>(COLLECTIONS.photos);

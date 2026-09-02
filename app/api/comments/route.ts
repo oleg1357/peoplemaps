@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     reviewId: String(body.reviewId),
     text: String(body.text),
     date: new Date().toISOString().slice(0, 10),
-    user_fk: body.user_fk ?? ctx.userId ?? null,
+    user_fk: ctx.userId ?? body.user_fk ?? null,
     authorName: typeof body.authorName === "string" ? body.authorName.slice(0, 80) : undefined,
     parentId: typeof body.parentId === "string" && body.parentId ? body.parentId : null,
   };

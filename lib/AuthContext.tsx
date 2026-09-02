@@ -11,10 +11,18 @@ import {
   getUser,
 } from "./auth-store";
 import { supabase, supabaseConfigured } from "./supabase";
-import type { User } from "./data";
+
+// Minimal signed-in-user shape exposed to the rest of the app. Works for both
+// the Supabase path (string id) and the legacy demo-user path (numeric id).
+export interface AppUser {
+  id: string | number;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+}
 
 interface AuthContextValue {
-  user: User | null;
+  user: AppUser | null;
   userId: string | null;
   login: (email: string, password: string) => { ok: boolean; message: string };
   signup: (
@@ -39,7 +47,7 @@ function supabaseUserToAppUser(sbUser: {
   id: string;
   email?: string;
   user_metadata?: Record<string, unknown>;
-} | null): User | null {
+} | null): AppUser | null {
   if (!sbUser) return null;
   const md: Record<string, unknown> = sbUser.user_metadata || {};
   return {
@@ -52,7 +60,7 @@ function supabaseUserToAppUser(sbUser: {
           ? md.email
           : "User",
     lastName: typeof md.last_name === "string" ? md.last_name : "",
-  } as unknown as User;
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -215,27 +223,6 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
-}
-
-export function useNotificationSync() {
-  useEffect(() => {
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission !== "denied" && Notification.permission !== "granted") {
-      Notification.requestPermission();
-    }
-    const lastVisited = window.localStorage.getItem("peoplemaps_lastVisited");
-    // Demo-only notification feature: the new-spot counter lives in the demo
-    // localStorage layer, so load it lazily to keep it out of the shared bundle.
-    import("./store").then(({ getNewSpotsSince }) => {
-      const count = getNewSpotsSince(lastVisited);
-      if (count > 0 && Notification.permission === "granted") {
-        new Notification(`${count} new spot${count === 1 ? "" : "s"} added`, {
-          body: "Since your last visit!",
-        });
-      }
-    });
-    window.localStorage.setItem("peoplemaps_lastVisited", new Date().toISOString().slice(0, 10));
-  }, []);
 }
 
 export { setLoggedInUser };

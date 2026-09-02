@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { cache } from "react";
 import { getMap, getMapBySlug, isGlobalAdmin } from "@/lib/admin";
 import { getServerSupabase } from "@/lib/supabase-server";
 import { MapSeededPage } from "@/components/MapSeededPage";
@@ -10,12 +11,16 @@ import { SITE_DESCRIPTION, siteUrl } from "@/lib/site";
 
 const origin = siteUrl();
 
-async function resolveMap(slug: string): Promise<MapDocument | null> {
-  if (!slug) return null;
-  // Prefer a stable permalink slug; also accept the Sanity _id directly so old
-  // `?map=<id>` links keep working when copied to `/map/<id>`.
-  return (await getMapBySlug(slug)) ?? (await getMap(slug));
-}
+// Wrapped in React's `cache()` so generateMetadata and the page body share a
+// single Sanity lookup per request instead of resolving the map twice.
+const resolveMap = cache(
+  async (slug: string): Promise<MapDocument | null> => {
+    if (!slug) return null;
+    // Prefer a stable permalink slug; also accept the Sanity _id directly so old
+    // `?map=<id>` links keep working when copied to `/map/<id>`.
+    return (await getMapBySlug(slug)) ?? (await getMap(slug));
+  }
+);
 
 export async function generateMetadata({
   params,

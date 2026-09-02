@@ -1,27 +1,17 @@
 import { sanityConfigured } from "@/sanity/lib/client";
-import { supabaseConfigured } from "./supabase";
-import {
-  addReview as localAddReview,
-  updateReview as localUpdateReview,
-  deleteReview as localDeleteReview,
-  getSpotStatus as localGetStatus,
-  setSpotStatus as localSetStatus,
-  toggleHelpfulReview as localToggleVote,
-  addComment as localAddComment,
-  addSpotPhoto as localAddPhoto,
-  getSpotPhotosCount,
-  getAllReviews,
-  getAuthorName,
-} from "./store";
+import { supabase, supabaseConfigured } from "./supabase";
 import type {
   Spot,
   Review,
   ReviewComment,
   SpotPhoto,
+  SpotPhotoMeta,
   SpotStatus,
   ModerationStatus,
   MapDocument,
   ProfileData,
+  Zone,
+  Route,
 } from "./types";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
@@ -33,11 +23,29 @@ export const backendLive =
   sanityConfigured &&
   supabaseConfigured;
 
+// Attach the signed-in user's access token so API routes can authenticate even
+// when the session cookie isn't reflected to the server immediately. Falls back
+// to the cookie path (no header) when there's no browser session or Supabase.
+async function authHeaders(): Promise<Record<string, string>> {
+  if (!supabase) return {};
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
+  const auth = await authHeaders();
   const res = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...auth,
       ...(init?.headers || {}),
     },
   });
@@ -55,17 +63,21 @@ export async function fetchMapSpots(mapId: string): Promise<Spot[]> {
   return req<Spot[]>(`/api/spots?mapId=${encodeURIComponent(mapId)}`);
 }
 
-// Everything the map view needs in a single request.
+// Everything the map view needs in a single request. Photo entries are
+// metadata-only (no dataUrl) — image bytes come from fetchPhotos() per spot
+// when its details panel opens.
 export interface MapData {
   spots: Spot[];
   reviews: Review[];
   comments: ReviewComment[];
-  photos: SpotPhoto[];
+  photos: SpotPhotoMeta[];
+  zones: Zone[];
+  routes: Route[];
 }
 
 export async function fetchMapData(mapId: string): Promise<MapData> {
   if (!backendLive) {
-    return { spots: [], reviews: [], comments: [], photos: [] };
+    return { spots: [], reviews: [], comments: [], photos: [], zones: [], routes: [] };
   }
   return req<MapData>(`/api/map-data?mapId=${encodeURIComponent(mapId)}`);
 }
@@ -90,6 +102,36 @@ export async function deleteSpot(spotId: string): Promise<void> {
   await req(`/api/spots?spotId=${encodeURIComponent(spotId)}`, { method: "DELETE" });
 }
 
+// ---- Zones ----
+export interface CreateZoneResult {
+  zone: Zone;
+  zones: Zone[]; // refreshed public zone list for the map
+}
+
+// POST returns the created zone plus the updated public zone list for the map,
+// so the caller can refresh in a single request.
+export async function createZone(input: Omit<Zone, "_id" | "createdAt">): Promise<CreateZoneResult> {
+  if (!backendLive) throw new Error("backend not configured");
+  return req<CreateZoneResult>("/api/zones", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// ---- Routes ----
+export interface CreateRouteResult {
+  route: Route;
+  routes: Route[]; // refreshed public route list for the map
+}
+
+export async function createRoute(input: Omit<Route, "_id" | "createdAt">): Promise<CreateRouteResult> {
+  if (!backendLive) throw new Error("backend not configured");
+  return req<CreateRouteResult>("/api/routes", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function fetchSpotById(spotId: string): Promise<Spot> {
   if (!backendLive) return {} as Spot;
   return req<Spot>(`/api/spots?spotId=${encodeURIComponent(spotId)}`);
@@ -102,11 +144,7 @@ export async function fetchReviews(spotId: string): Promise<Review[]> {
 }
 
 export async function addReview(spotId: string, score: number, review: string, userId?: string | null): Promise<Review | null> {
-  if (!backendLive) {
-    // fallback kept local (numeric id used by demo layer)
-    localAddReview(Number(spotId), score, review, userId);
-    return null;
-  }
+  if (!backendLive) return null;
   return req<Review>("/api/reviews", {
     method: "POST",
     body: JSON.stringify({ spotId, score, review, user_fk: userId }),
@@ -114,38 +152,29 @@ export async function addReview(spotId: string, score: number, review: string, u
 }
 
 export async function updateReview(reviewId: string, review: string, score: number): Promise<void> {
-  if (!backendLive) {
-    localUpdateReview(Number(reviewId), review, score);
-    return;
-  }
+  if (!backendLive) return;
   await req("/api/reviews", { method: "PATCH", body: JSON.stringify({ id: reviewId, review, score }) });
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
-  if (!backendLive) {
-    localDeleteReview(Number(reviewId));
-    return;
-  }
+  if (!backendLive) return;
   await req(`/api/reviews?id=${encodeURIComponent(reviewId)}`, { method: "DELETE" });
 }
 
 // ---- Status ----
 export async function fetchStatus(spotId: string): Promise<SpotStatus> {
-  if (!backendLive) return localGetStatus(Number(spotId));
+  if (!backendLive) return "open";
   return (await req<{ status: SpotStatus }>(`/api/spots/status?spotId=${encodeURIComponent(spotId)}`)).status;
 }
 
 export async function setStatus(spotId: string, status: SpotStatus): Promise<void> {
-  if (!backendLive) {
-    localSetStatus(Number(spotId), status);
-    return;
-  }
+  if (!backendLive) return;
   await req("/api/spots/status", { method: "POST", body: JSON.stringify({ spotId, status }) });
 }
 
 // ---- Votes ----
 export async function toggleHelpfulReview(reviewId: string, userId: string | null): Promise<{ count: number; voted: boolean }> {
-  if (!backendLive) return localToggleVote(Number(reviewId), userId);
+  if (!backendLive) return { count: 0, voted: false };
   if (!userId) {
     return req<{ count: number; voted: boolean }>(`/api/votes?reviewId=${encodeURIComponent(reviewId)}`);
   }
@@ -173,10 +202,7 @@ export async function addComment(
   text: string,
   opts: AddCommentOptions = {}
 ): Promise<ReviewComment | null> {
-  if (!backendLive) {
-    localAddComment(Number(reviewId), text, opts.userId);
-    return null;
-  }
+  if (!backendLive) return null;
   return req<ReviewComment>("/api/comments", {
     method: "POST",
     body: JSON.stringify({
@@ -203,23 +229,14 @@ export async function fetchPhotos(spotId: string): Promise<SpotPhoto[]> {
 }
 
 export async function addSpotPhoto(spotId: string, dataUrl: string, userId?: string | null): Promise<SpotPhoto | null> {
-  if (!backendLive) {
-    localAddPhoto(Number(spotId), dataUrl, userId);
-    return null;
-  }
+  if (!backendLive) return null;
   return req<SpotPhoto>("/api/photos", { method: "POST", body: JSON.stringify({ spotId, dataUrl, user_fk: userId }) });
 }
 
 export async function getSpotPhotosCountApi(spotId: string): Promise<number> {
-  if (!backendLive) return getSpotPhotosCount(Number(spotId));
+  if (!backendLive) return 0;
   const photos = await fetchPhotos(spotId);
   return photos.length;
-}
-
-// ---- Author name helpers (demo only falls back to local users) ----
-export function authorName(user_fk: number | null | undefined | string): string {
-  if (user_fk === null || user_fk === undefined) return "Anonymous";
-  return getAuthorName(Number(user_fk));
 }
 
 // ---- Admin (map owners / moderators / global admins) ----
@@ -387,6 +404,3 @@ export async function fetchProfile(): Promise<ProfileData> {
   }
   return req<ProfileData>("/api/me");
 }
-
-// Convenience: author display for a Mongo spot (ownerName not stored on spot)
-export { getAllReviews, getAuthorName };

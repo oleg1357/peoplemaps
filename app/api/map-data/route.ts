@@ -1,10 +1,10 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error } from "@/lib/api";
-import type { Spot, Review, ReviewComment, SpotPhoto } from "@/lib/types";
+import type { Spot, Review, ReviewComment, SpotPhoto, Zone, Route } from "@/lib/types";
 
 // GET /api/map-data?mapId=<id>
 // One request that loads everything the map view needs at once: the public
-// spots for the map plus their reviews, comments and photos.
+// spots for the map plus their reviews, comments, photos, zones and routes.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mapId = searchParams.get("mapId");
@@ -15,6 +15,28 @@ export async function GET(req: Request) {
     // and are not hidden. Pending and rejected spots are hidden from public views.
     const spots = await db
       .collection<Spot>(COLLECTIONS.spots)
+      .find({
+        mapId,
+        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+        hidden: { $ne: true },
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Public zones (same approval rule as spots).
+    const zones = await db
+      .collection<Zone>(COLLECTIONS.zones)
+      .find({
+        mapId,
+        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+        hidden: { $ne: true },
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Public routes (same approval rule as spots).
+    const routes = await db
+      .collection<Route>(COLLECTIONS.routes)
       .find({
         mapId,
         $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
@@ -43,10 +65,11 @@ export async function GET(req: Request) {
           .toArray()
       : [];
 
-    // Photos are data URLs and can be large, so cap the payload. Bound each
-    // spot to its most recent few photos (the app shows at most 6 per spot) so
-    // the response size scales with the number of spots, not with one spot
-    // having uploaded a huge pile of images.
+    // Photos are data URLs and can be large. The map payload only carries photo
+    // metadata (id, spotId, date); the actual image bytes are served lazily per
+    // spot via GET /api/photos when its details open. Bound each spot to its
+    // most recent few photos so the count stays honest and the response scales
+    // with the number of spots, not with someone having uploaded a huge pile.
     const photos = spotIds.length
       ? await db
           .collection<SpotPhoto>(COLLECTIONS.photos)
@@ -57,10 +80,20 @@ export async function GET(req: Request) {
             { $project: { docs: { $slice: ["$docs", 6] } } },
             { $unwind: "$docs" },
             { $replaceRoot: { newRoot: "$docs" } },
+            { $project: { dataUrl: 0 } },
           ])
           .toArray()
       : [];
 
-    return json({ spots, reviews, comments, photos });
+    return json(
+      { spots, reviews, comments, photos, zones, routes },
+      {
+        headers: {
+          // Public GET — short CDN cache so repeat visits (and the Next/Vercel
+          // cache) serve this without a fresh serverless invocation.
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
+        },
+      }
+    );
   });
 }
