@@ -18,14 +18,28 @@ export async function GET(req: Request) {
   });
 }
 
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+
 export async function POST(req: Request) {
   const ctx = await getOptionalContext(req);
   const body = await req.json();
   if (!body.spotId || !body.dataUrl) return error("Missing spotId or dataUrl");
+  const dataUrl: string = String(body.dataUrl);
+
+  // Validate dataUrl format and rough size (base64 inflates ~33%)
+  if (!/^data:image\/(jpeg|png|webp|gif);base64,/.test(dataUrl)) {
+    return error("dataUrl must be a base64 data URL (jpeg, png, webp, or gif)");
+  }
+  const base64Payload = dataUrl.split(",")[1] ?? "";
+  const estimatedBytes = Math.ceil(base64Payload.length * 0.75);
+  if (estimatedBytes > MAX_PHOTO_BYTES) {
+    return error(`Photo exceeds the ${MAX_PHOTO_BYTES / 1024 / 1024} MB size limit`);
+  }
+
   const spotId: string = String(body.spotId);
   const photo: SpotPhoto = {
     spotId,
-    dataUrl: String(body.dataUrl),
+    dataUrl,
     date: new Date().toISOString().slice(0, 10),
     uploader_fk: ctx.userId ?? body.uploader_fk ?? null,
   };

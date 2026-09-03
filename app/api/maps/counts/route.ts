@@ -15,6 +15,8 @@ export async function GET() {
       .toArray();
     const counts: Record<string, number> = {};
     for (const r of rows) counts[r._id] = r.count;
-    return json({ counts });
+    return json({ counts }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
+    });
   });
 }

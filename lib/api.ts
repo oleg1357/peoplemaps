@@ -50,6 +50,31 @@ export function byIdFilter<D>(oid: ObjectId): Filter<D> {
   return { _id: oid } as unknown as Filter<D>;
 }
 
+/** Validate a [lat, lng] pair. */
+export function isValidLatLng(p: unknown): p is [number, number] {
+  return (
+    Array.isArray(p) &&
+    p.length === 2 &&
+    typeof p[0] === "number" &&
+    Number.isFinite(p[0]) &&
+    p[0] >= -90 &&
+    p[0] <= 90 &&
+    typeof p[1] === "number" &&
+    Number.isFinite(p[1]) &&
+    p[1] >= -180 &&
+    p[1] <= 180
+  );
+}
+
+/** MongoDB filter for publicly visible content (spots, zones, routes). */
+export function publicContentFilter<T>(mapId: string): Filter<T> {
+  return {
+    mapId,
+    $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+    hidden: { $ne: true },
+  } as Filter<T>;
+}
+
 export async function getOptionalContext(req: Request) {
   // Resolve the active Supabase user from the session cookie, or from a
   // `Bearer <jwt>` header when present (server-to-server calls).

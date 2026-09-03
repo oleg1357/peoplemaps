@@ -43,6 +43,8 @@ export function Rating({
           type="button"
           className={`star small-${small}`}
           onClick={() => onChange?.(i)}
+          role="radio"
+          aria-checked={value === i}
           aria-label={`${i} star`}
           style={{ color, cursor: "pointer" }}
         >
@@ -54,5 +56,13 @@ export function Rating({
       );
     }
   }
-  return <div className={small ? "rating small" : "rating"}>{galaxies}</div>;
+  return (
+    <div
+      className={small ? "rating small" : "rating"}
+      role="radiogroup"
+      aria-label={`Rating: ${value} out of ${STARS} stars`}
+    >
+      {galaxies}
+    </div>
+  );
 }

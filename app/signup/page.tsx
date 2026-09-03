@@ -56,7 +56,7 @@ export default function SignupPage() {
             />
             <input
               className="input"
-              type="text"
+              type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -103,7 +103,7 @@ export default function SignupPage() {
           </div>
           <img
             id="auth-image"
-            src="https://i.ibb.co/hL2mS5V/pin-3.png"
+            src="/pin-3.png"
             alt="PeopleMaps map pin"
           />
         </div>

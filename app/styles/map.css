@@ -1763,6 +1763,24 @@
   box-shadow: var(--shadow-md);
 }
 
+.layer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+#map-search {
+  box-shadow: var(--shadow-md);
+}
+
 .map-ctrl-btn {
   display: inline-flex;
   align-items: center;

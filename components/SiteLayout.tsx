@@ -1,5 +1,3 @@
-"use client";
-
 import { Nav } from "./Nav";
 
 export function SiteLayout({ children }: { children: React.ReactNode }) {

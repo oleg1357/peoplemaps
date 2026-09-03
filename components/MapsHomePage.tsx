@@ -7,7 +7,7 @@ import L from "leaflet";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useMapData } from "@/lib/MapContext";
-import { tileLayer, MAP_STYLES } from "@/lib/tiles";
+import { tileLayer } from "@/lib/tiles";
 import type { MapStyle } from "@/lib/tiles";
 import type { Spot, SpotStatus } from "@/lib/types";
 import {
@@ -20,24 +20,29 @@ import {
   deleteComment,
   addSpotPhoto,
   fetchPhotos,
+  deleteSpot,
+  updateOwnSpot,
   backendLive,
 } from "@/lib/api-client";
-import type { Review, ReviewComment, SpotPhoto, SpotPhotoMeta } from "@/lib/types";
+import type { SpotPhoto } from "@/lib/types";
 import type { MapData } from "@/lib/api-client";
 
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
 
-import { userIcon } from "@/lib/icons";
+import { userIcon } from "@/lib/leaflet-icons";
 import {
-  MARKER_PRESETS,
   DEFAULT_MARKER,
   getMarkerColor,
   resolveMarker,
   makeMarkerDivIcon,
 } from "@/lib/markers";
 import { SpotTooltip } from "./SpotTooltip";
-import { IconLink, IconMapMarker } from "./icons";
+import { IconLink } from "./icons";
+import { SpotDetailPanel, type SpotDetailBundle } from "./map/SpotDetailPanel";
+import { MapToolbar } from "./map/MapToolbar";
+import { AddSpotForm } from "./map/AddSpotForm";
+import { DrawForm } from "./map/DrawForm";
 
 const markerIconCache = new Map<string, L.Icon | L.DivIcon>();
 function spotIconFor(emoji: string, color: string): L.Icon | L.DivIcon {
@@ -92,11 +97,6 @@ function FlyToView({
   return null;
 }
 
-interface DetailBundle {
-  reviews: Array<Review & { author: string; comments: Array<ReviewComment & { author: string }> }>;
-  photos: SpotPhotoMeta[];
-}
-
 export function MapsHomePage({
   initialCenter,
   initialZoom,
@@ -129,7 +129,7 @@ export function MapsHomePage({
   );
 
   const [selected, setSelected] = useState<Spot | null>(null);
-  const [bundle, setBundle] = useState<DetailBundle | null>(null);
+  const [bundle, setBundle] = useState<SpotDetailBundle | null>(null);
   const [status, setStatusState] = useState<SpotStatus>("unknown");
   const [reviewText, setReviewText] = useState("");
   const [reviewScore, setReviewScore] = useState(3);
@@ -153,16 +153,25 @@ export function MapsHomePage({
   // Zone/route drawing state.
   const [drawMode, setDrawMode] = useState<"zone" | "route" | null>(null);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
+  const [drawUndo, setDrawUndo] = useState<[number, number][][]>([]);
+  const [drawRedo, setDrawRedo] = useState<[number, number][][]>([]);
   const [drawName, setDrawName] = useState("");
   const [drawDesc, setDrawDesc] = useState("");
   const [drawColor, setDrawColor] = useState<string>(DEFAULT_MARKER.color);
   const [drawError, setDrawError] = useState("");
+  // Map search & layer filters.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSpots, setShowSpots] = useState(true);
+  const [showZones, setShowZones] = useState(true);
+  const [showRoutes, setShowRoutes] = useState(true);
   const flyTargetRef = useRef<[number, number] | null>(null);
 
   // Reset drawing whenever the active map changes.
   useEffect(() => {
     setDrawMode(null);
     setDrawPoints([]);
+    setDrawUndo([]);
+    setDrawRedo([]);
     setDrawName("");
     setDrawDesc("");
     setDrawError("");
@@ -178,7 +187,22 @@ export function MapsHomePage({
     activeMap?.defaultMarkerColor ??
     DEFAULT_MARKER.color;
 
-  const loadBundle = (spot: Spot, data: MapData): DetailBundle => {
+  // Search/filter derived views. A spot matches when the query is a
+  // case-insensitive substring of its name, city or street.
+  const q = searchQuery.trim().toLowerCase();
+  const searchableSpots = q
+    ? spots.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.city?.toLowerCase().includes(q) ||
+          s.street?.toLowerCase().includes(q)
+      )
+    : spots;
+  const visibleSpots = showSpots ? searchableSpots : [];
+  const visibleZones = showZones ? zones : [];
+  const visibleRoutes = showRoutes ? routes : [];
+
+  const loadBundle = (spot: Spot, data: MapData): SpotDetailBundle => {
     const reviews = data.reviews
       .filter((r) => r.spotId === spot._id)
       .map((r) => ({
@@ -269,6 +293,21 @@ export function MapsHomePage({
 
   const [editing, setEditing] = useState<{ id: string; review: string; score: number } | null>(null);
 
+  // Author edit of their own spot (name/address/marker/color).
+  const [editingSpot, setEditingSpot] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editStreet, setEditStreet] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [editZip, setEditZip] = useState(0);
+  const [editMarker, setEditMarker] = useState<string | null>(null);
+  const [editMarkerColor, setEditMarkerColor] = useState<string | null>(null);
+  const [editSpotError, setEditSpotError] = useState("");
+
+  // Report a spot for moderator review.
+  const [reporting, setReporting] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDone, setReportDone] = useState(false);
+
   const handleDeleteReview = async (reviewId: string) => {
     await deleteReview(reviewId);
     patchMapData((d) => ({
@@ -276,6 +315,41 @@ export function MapsHomePage({
       reviews: d.reviews.filter((r) => r._id !== reviewId),
       comments: d.comments.filter((c) => c.reviewId !== reviewId),
     }));
+  };
+
+  const startEditSpot = (spot: Spot) => {
+    setEditName(spot.name);
+    setEditStreet(spot.street ?? "");
+    setEditCity(spot.city ?? "");
+    setEditZip(spot.zip ? Number(spot.zip) : 0);
+    setEditMarker(spot.marker ?? null);
+    setEditMarkerColor(spot.markerColor ?? null);
+    setEditSpotError("");
+    setEditingSpot(true);
+  };
+
+  const handleSaveOwnSpot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected?._id) return;
+    setEditSpotError("");
+    const updated = await updateOwnSpot(selected._id, {
+      name: editName.trim(),
+      street: editStreet.trim(),
+      city: editCity.trim(),
+      zip: editZip,
+      marker: editMarker,
+      markerColor: editMarkerColor,
+    });
+    if (!updated) {
+      setEditSpotError("Could not save your changes.");
+      return;
+    }
+    patchMapData((d) => ({
+      ...d,
+      spots: d.spots.map((s) => (s._id === selected._id ? updated : s)),
+    }));
+    setSelected(updated);
+    setEditingSpot(false);
   };
 
   const handleComment = async (reviewId: string, parentId: string | null) => {
@@ -337,6 +411,21 @@ export function MapsHomePage({
     e.target.value = "";
   };
 
+  const handleDeleteSpot = async () => {
+    if (!selected?._id) return;
+    if (!confirm("Delete this spot permanently?")) return;
+    await deleteSpot(selected._id);
+    patchMapData((d) => ({
+      ...d,
+      spots: d.spots.filter((s) => s._id !== selected._id),
+      reviews: d.reviews.filter((r) => r.spotId !== selected._id),
+      comments: d.comments.filter((c) =>
+        !d.reviews.some((r) => r._id === c.reviewId && r.spotId === selected._id)
+      ),
+    }));
+    setSelected(null);
+  };
+
   const startDraw = (mode: "zone" | "route") => {
     // Drawing and spot-adding are mutually exclusive.
     setAdding(false);
@@ -346,23 +435,43 @@ export function MapsHomePage({
     setDrawName("");
     setDrawDesc("");
     setDrawPoints((pts) => (drawMode === mode ? [] : pts));
+    setDrawUndo([]);
+    setDrawRedo([]);
     setDrawMode((m) => (m === mode ? null : mode));
   };
 
   const cancelDraw = () => {
     setDrawMode(null);
     setDrawPoints([]);
+    setDrawUndo([]);
+    setDrawRedo([]);
     setDrawName("");
     setDrawDesc("");
     setDrawError("");
   };
 
   const handleDrawPlace = (p: [number, number]) => {
-    setDrawPoints((pts) => [...pts, p]);
+    setDrawPoints((pts) => {
+      setDrawUndo((u) => [...u, pts]);
+      setDrawRedo([]);
+      return [...pts, p];
+    });
   };
 
   const handleUndoPoint = () => {
-    setDrawPoints((pts) => pts.slice(0, -1));
+    if (drawUndo.length === 0) return;
+    const previous = drawUndo[drawUndo.length - 1];
+    setDrawRedo((redoStack) => [...redoStack, drawPoints]);
+    setDrawPoints(previous);
+    setDrawUndo((undoStack) => undoStack.slice(0, -1));
+  };
+
+  const handleRedoPoint = () => {
+    if (drawRedo.length === 0) return;
+    const next = drawRedo[drawRedo.length - 1];
+    setDrawUndo((undoStack) => [...undoStack, drawPoints]);
+    setDrawPoints(next);
+    setDrawRedo((redoStack) => redoStack.slice(0, -1));
   };
 
   const saveDraw = async (type: "zone" | "route") => {
@@ -607,326 +716,74 @@ export function MapsHomePage({
         </div>
       )}
 
-      <div id="map-controls">
-        <select
-          id="map-style-select"
-          className="places-select"
-          value={mapStyle}
-          onChange={(e) => setMapStyle(e.target.value as MapStyle)}
-          title="Map style"
-        >
-          {MAP_STYLES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="map-ctrl-btn"
-          onClick={centerOnMe}
-          title="Center on my location"
-        >
-          <IconMapMarker size={16} /> Near me
-        </button>
-        <button
-          type="button"
-          className="map-ctrl-btn"
-          onClick={copyViewLink}
-          title="Copy link to this map view"
-        >
-          <IconLink size={16} />
-          {viewCopied ? "Copied!" : "Share view"}
-        </button>
-      </div>
+      <MapToolbar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        showSpots={showSpots}
+        setShowSpots={setShowSpots}
+        showZones={showZones}
+        setShowZones={setShowZones}
+        showRoutes={showRoutes}
+        setShowRoutes={setShowRoutes}
+        mapStyle={mapStyle}
+        setMapStyle={setMapStyle}
+        onCenterOnMe={centerOnMe}
+        onCopyView={copyViewLink}
+        viewCopied={viewCopied}
+      />
 
       {selected && bundle && (
-        <div id="details">
-          <div className="details-top">
-            <button type="button" id="closeDetails" className="close-btn" onClick={() => setSelected(null)}>
-              Close
-            </button>
-            <div className="flex">
-              <h2 style={{ margin: 0 }}>{selected.name}</h2>
-            </div>
-            <p style={{ margin: "6px 0 0" }}>
-              {selected.street || "No address"} {selected.city && `, ${selected.city}`}
-            </p>
-            <div className="status-row">
-              <div className="status-control">
-                {(["open", "closed", "unknown"] as SpotStatus[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`status-btn ${s} ${status === s ? "active" : ""}`}
-                    onClick={() => handleStatus(s)}
-                  >
-                    {s === "open" ? "Open" : s === "closed" ? "Closed" : "Unknown"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div id="details-content">
-            {!editing ? (
-              <>
-                <h3>Add a review</h3>
-                <textarea
-                  value={reviewText}
-                  onChange={(e) => setReviewText(e.target.value)}
-                  placeholder="How was your visit?"
-                  rows={2}
-                  style={{ width: "100%" }}
-                />
-                <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "8px 0" }}>
-                  <span>Score</span>
-                  <select value={reviewScore} onChange={(e) => setReviewScore(Number(e.target.value))}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="action-btn2" onClick={handleSaveReview}>
-                    Submit review
-                  </button>
-                </div>
-
-                <div id="reviews-box">
-                  {bundle.reviews.map((r) => (
-                    <div id="reviews" key={r._id}>
-                      <div className="review-head">
-                        <span className="review-score">{r.score}/5</span>
-                        <span className="review-author">{r.author}</span>
-                        <span id="review-date">{r.date}</span>
-                      </div>
-                      <p style={{ margin: "6px 0" }}>{r.review || <span className="italic">No review</span>}</p>
-                      <div className="review-actions">
-                        <button type="button" className="helpful-btn" onClick={() => r._id && handleVote(r._id)}>
-                          Helpful
-                        </button>
-                        {r._id && (
-                          <button
-                            type="button"
-                            className="link-btn"
-                            onClick={() =>
-                              setReplyTarget({ reviewId: r._id as string, commentId: null })
-                            }
-                          >
-                            Reply
-                          </button>
-                        )}
-                        {r._id && Boolean(userId) && r.user_fk === userId && (
-                          <button
-                            type="button"
-                            className="link-btn"
-                            onClick={() => setEditing({ id: r._id as string, review: r.review, score: r.score })}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {r._id && Boolean(userId) && r.user_fk === userId && (
-                          <button type="button" className="link-btn danger" onClick={() => handleDeleteReview(r._id!)}>
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                      <div className="comments-section">
-                        {(() => {
-                          const byParent = new Map<
-                            string,
-                            (typeof r.comments)[number][]
-                          >();
-                          const roots: (typeof r.comments)[number][] = [];
-                          r.comments.forEach((c) => {
-                            if (c.parentId && c._id) {
-                              let arr = byParent.get(c.parentId);
-                              if (!arr) { arr = []; byParent.set(c.parentId, arr); }
-                              arr.push(c);
-                            } else {
-                              roots.push(c);
-                            }
-                          });
-                          const renderComment = (
-                            c: (typeof r.comments)[number],
-                            depth: number
-                          ) => {
-                            const children: (typeof r.comments)[number][] =
-                              c._id ? (byParent.get(c._id) ?? []) : [];
-                            const key = `${r._id}:${c._id ?? "root"}`;
-                            const mine =
-                              Boolean(userId) && c.user_fk === userId;
-                            return (
-                              <div
-                                key={c._id}
-                                className={`comment ${depth > 0 ? "reply" : ""}`}
-                              >
-                                <div className="comment-head">
-                                  <strong>{c.author}</strong>
-                                  <span className="comment-date">{c.date}</span>
-                                  {mine && (
-                                    <button
-                                      type="button"
-                                      className="link-btn danger"
-                                      onClick={() => c._id && handleDeleteComment(c._id)}
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
-                                <p className="comment-text">{c.text}</p>
-                                {r._id && (
-                                  <button
-                                    type="button"
-                                    className="link-btn comment-reply-btn"
-                                    onClick={() =>
-                                      setReplyTarget({
-                                        reviewId: r._id as string,
-                                        commentId: c._id ?? null,
-                                      })
-                                    }
-                                  >
-                                    Reply
-                                  </button>
-                                )}
-                                {r._id &&
-                                  replyTarget?.reviewId === r._id &&
-                                  replyTarget.commentId === c._id && (
-                                    <div className="add-comment">
-                                      <input
-                                        autoFocus
-                                        value={commentDrafts[key] || ""}
-                                        onChange={(e) =>
-                                          setCommentDrafts((d) => ({ ...d, [key]: e.target.value }))
-                                        }
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") {
-                                            e.preventDefault();
-                                            handleComment(r._id as string, c._id ?? null);
-                                          }
-                                        }}
-                                        placeholder="Write a reply…"
-                                      />
-                                      <button
-                                        type="button"
-                                        className="link-btn"
-                                        onClick={() =>
-                                          handleComment(r._id as string, c._id ?? null)
-                                        }
-                                      >
-                                        Reply
-                                      </button>
-                                    </div>
-                                  )}
-                                {children.length > 0 && (
-                                  <div className="comment-nested">
-                                    {children.map((ch) =>
-                                      renderComment(ch, depth + 1)
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          };
-                          return (
-                            <>
-                              {roots.map((c) => renderComment(c, 0))}
-                              {r.comments.length === 0 && (
-                                <p className="italic muted">
-                                  No comments yet.
-                                </p>
-                              )}
-                              {r._id &&
-                                replyTarget?.reviewId === r._id &&
-                                replyTarget.commentId === null && (
-                                  <div className="add-comment">
-                                    <input
-                                      autoFocus
-                                      value={commentDrafts[`${r._id}:root`] || ""}
-                                      onChange={(e) =>
-                                        setCommentDrafts((d) => ({
-                                          ...d,
-                                          [`${r._id as string}:root`]: e.target.value,
-                                        }))
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
-                                          handleComment(r._id as string, null);
-                                        }
-                                      }}
-                                      placeholder="Write a reply…"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="link-btn"
-                                      onClick={() => handleComment(r._id as string, null)}
-                                    >
-                                      Reply
-                                    </button>
-                                  </div>
-                                )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  ))}
-                  {bundle.reviews.length === 0 && (
-                    <p className="italic">No reviews yet — be the first!</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div>
-                <h3>Edit review</h3>
-                <textarea
-                  value={editing.review}
-                  onChange={(e) => setEditing({ ...editing, review: e.target.value })}
-                  rows={2}
-                  style={{ width: "100%" }}
-                />
-                <select
-                  value={editing.score}
-                  onChange={(e) => setEditing({ ...editing, score: Number(e.target.value) })}
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="action-btn2" onClick={() => handleEditReview(editing.id, editing.review, editing.score)}>
-                  Save
-                </button>
-                <button type="button" className="link-btn" onClick={() => setEditing(null)}>
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            <h3 style={{ marginTop: 16 }}>Photos ({bundle.photos.length})</h3>
-            <div className="photos-grid">
-              {(() => {
-                if (backendLive) {
-                  const loaded = selected?._id ? spotPhotos[selected._id] ?? [] : [];
-                  if (loaded.length === 0 && photosLoading) {
-                    return <span className="italic">Loading photos…</span>;
-                  }
-                  return loaded.map((p) => (
-                    <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
-                  ));
-                }
-                // Demo mode: mapData.photos already carry the image bytes.
-                return (bundle.photos as SpotPhoto[]).map((p) => (
-                  <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
-                ));
-              })()}
-            </div>
-            <input type="file" accept="image/*" onChange={handlePhoto} />
-          </div>
-        </div>
+        <SpotDetailPanel
+          selected={selected}
+          bundle={bundle}
+          status={status}
+          onStatus={handleStatus}
+          userId={userId}
+          editingSpot={editingSpot}
+          setEditingSpot={setEditingSpot}
+          startEditSpot={startEditSpot}
+          handleSaveOwnSpot={handleSaveOwnSpot}
+          editName={editName}
+          setEditName={setEditName}
+          editStreet={editStreet}
+          setEditStreet={setEditStreet}
+          editCity={editCity}
+          setEditCity={setEditCity}
+          editZip={editZip}
+          setEditZip={setEditZip}
+          editMarker={editMarker}
+          setEditMarker={setEditMarker}
+          editMarkerColor={editMarkerColor}
+          setEditMarkerColor={setEditMarkerColor}
+          editSpotError={editSpotError}
+          editing={editing}
+          setEditing={setEditing}
+          reviewText={reviewText}
+          setReviewText={setReviewText}
+          reviewScore={reviewScore}
+          setReviewScore={setReviewScore}
+          handleSaveReview={handleSaveReview}
+          handleVote={handleVote}
+          handleDeleteReview={handleDeleteReview}
+          handleEditReview={handleEditReview}
+          commentDrafts={commentDrafts}
+          setCommentDrafts={setCommentDrafts}
+          replyTarget={replyTarget}
+          setReplyTarget={setReplyTarget}
+          handleComment={handleComment}
+          handleDeleteComment={handleDeleteComment}
+          spotPhotos={spotPhotos}
+          photosLoading={photosLoading}
+          handlePhoto={handlePhoto}
+          reporting={reporting}
+          setReporting={setReporting}
+          reportReason={reportReason}
+          setReportReason={setReportReason}
+          reportDone={reportDone}
+          setReportDone={setReportDone}
+          handleDeleteSpot={handleDeleteSpot}
+          onClose={() => setSelected(null)}
+        />
       )}
 
       <MapContainer center={mapCenter} zoom={mapZoom} zoomSnap={0.5} style={{ height: "100%", width: "100%" }}>
@@ -943,7 +800,7 @@ export function MapsHomePage({
           <MapClickHandler onPlace={handleDrawPlace} />
         )}
         {/* Zones: filled polygons or radius circles */}
-        {zones.map((z) =>
+        {visibleZones.map((z) =>
           z.shape === "circle" && z.center && z.radius ? (
             <Circle
               key={z._id}
@@ -982,7 +839,7 @@ export function MapsHomePage({
           ) : null
         )}
         {/* Routes: polylines */}
-        {routes.map((r) =>
+        {visibleRoutes.map((r) =>
           r.points && r.points.length >= 2 ? (
             <Polyline
               key={r._id}
@@ -1001,7 +858,7 @@ export function MapsHomePage({
             </Polyline>
           ) : null
         )}
-        {spots.map((s) => {
+        {visibleSpots.map((s) => {
           const base = resolveMarker(s.marker);
           return (
             <Marker
@@ -1082,122 +939,36 @@ export function MapsHomePage({
       </MapContainer>
 
       {adding && (
-        <form
+        <AddSpotForm
+          newName={newName}
+          setNewName={setNewName}
+          pickMarkerEmoji={pickMarkerEmoji}
+          pickMarkerColor={pickMarkerColor}
+          setNewMarker={setNewMarker}
+          setNewMarkerColor={setNewMarkerColor}
+          activeMap={activeMap}
           onSubmit={handleAddSpot}
-          className="map-draw-card"
-        >
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
-          {activeMap?.submissionNote && (
-            <div
-              className="map-submit-note"
-              style={{
-                borderLeftColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
-              }}
-            >
-              {activeMap.submissionNote}
-            </div>
-          )}
-          <div className="marker-picker-inline">
-            {MARKER_PRESETS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                title={m.label}
-                className={`marker-opt ${m.emoji === pickMarkerEmoji ? "active" : ""}`}
-                onClick={() => {
-                  setNewMarker(m.emoji);
-                  setNewMarkerColor(m.color);
-                }}
-              >
-                {m.emoji}
-              </button>
-            ))}
-            <input
-              type="color"
-              value={getMarkerColor(pickMarkerColor)}
-              onChange={(e) => setNewMarkerColor(e.target.value)}
-              title="Custom color"
-            />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              className="pm-marker"
-              style={{
-                width: 28,
-                height: 28,
-                background: getMarkerColor(pickMarkerColor),
-              }}
-            >
-              <span>{pickMarkerEmoji}</span>
-            </span>
-            <button type="submit" className="action-btn2" disabled={!newName.trim()}>
-              Save spot
-            </button>
-          </div>
-        </form>
+        />
       )}
 
       {drawMode && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveDraw(drawMode as "zone" | "route");
-          }}
-          className="map-draw-card"
-        >
-          <strong>{drawMode === "zone" ? "Add zone" : "Add route"}</strong>
-          <span className="draw-desc">
-            {drawMode === "zone"
-              ? `Click the map to place corners — ${drawPoints.length} placed, need at least 3.`
-              : `Click the map to place points — ${drawPoints.length} placed, need at least 2.`}
-          </span>
-          <div className="map-draw-actions">
-            <button type="button" className="link-btn" onClick={handleUndoPoint} disabled={drawPoints.length === 0}>
-              Undo point
-            </button>
-            <button type="button" className="link-btn" onClick={cancelDraw}>
-              Cancel
-            </button>
-          </div>
-          <input
-            value={drawName}
-            onChange={(e) => setDrawName(e.target.value)}
-            placeholder={`${drawMode === "zone" ? "Zone name" : "Route name"} (required)`}
-          />
-          <input
-            value={drawDesc}
-            onChange={(e) => setDrawDesc(e.target.value)}
-            placeholder="Description (optional)"
-          />
-          <div className="map-draw-color">
-            <span className="color-label">Color</span>
-            <input
-              type="color"
-              value={drawColor}
-              onChange={(e) => setDrawColor(e.target.value)}
-              title="Color"
-            />
-            <input
-              type="text"
-              value={drawColor}
-              onChange={(e) => { if (/^#[0-9a-fA-F]{3,8}$/.test(e.target.value)) setDrawColor(e.target.value); }}
-              pattern="#[0-9a-fA-F]{3,8}"
-              title="Hex color"
-            />
-          </div>
-          {drawError && (
-            <div className="draw-error">
-              <strong>Could not add {drawMode}:</strong> {drawError}
-            </div>
-          )}
-          <button
-            type="submit"
-            className="action-btn2"
-            title={!drawName.trim() ? "Enter a name to save" : undefined}
-          >
-            Save {drawMode}
-          </button>
-        </form>
+        <DrawForm
+          drawMode={drawMode}
+          drawPoints={drawPoints}
+          drawUndo={drawUndo}
+          drawRedo={drawRedo}
+          drawName={drawName}
+          setDrawName={setDrawName}
+          drawDesc={drawDesc}
+          setDrawDesc={setDrawDesc}
+          drawColor={drawColor}
+          setDrawColor={setDrawColor}
+          drawError={drawError}
+          handleUndoPoint={handleUndoPoint}
+          handleRedoPoint={handleRedoPoint}
+          cancelDraw={cancelDraw}
+          saveDraw={saveDraw}
+        />
       )}
 
       {spotsLoading && <p style={{ position: "absolute", top: "var(--header-h)", right: 10 }}>Loading spots…</p>}

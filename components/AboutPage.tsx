@@ -1,5 +1,3 @@
-"use client";
-
 import { PeopleMapsLogo } from "@/components/Logo";
 import { IconMapMarker } from "@/components/icons";
 

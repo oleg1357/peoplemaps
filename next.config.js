@@ -14,6 +14,11 @@ const nextConfig = {
             key: "Permissions-Policy",
             value: "geolocation=(self), camera=(), microphone=()",
           },
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sanity.io https://cdn.sanity.io; style-src 'self' 'unsafe-inline' https://*.sanity.io https://cdn.sanity.io; img-src 'self' data: blob: https://*.sanity.io https://cdn.sanity.io https://i.ibb.co https://*.supabase.co; font-src 'self' https://*.sanity.io https://cdn.sanity.io; connect-src 'self' https://*.sanity.io https://*.supabase.co wss://*.supabase.co; frame-src 'self' https://*.sanity.io https://*.supabase.co;",
+          },
         ],
       },
       {

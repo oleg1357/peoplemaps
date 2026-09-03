@@ -72,17 +72,32 @@ export async function GET(req: Request) {
     const db = await getDb();
     if (db) {
       const col = db.collection(COLLECTIONS.spots);
-      withCounts = (await Promise.all(
-        viewable.map(async (m) => {
-          const spots = await col.find({ mapId: m._id }).toArray();
-          return {
-            ...m,
-            spotTotal: spots.length,
-            spotPending: spots.filter((s) => s.moderation === "pending").length,
-            spotHidden: spots.filter((s) => s.hidden === true).length,
-          };
-        })
-      )) as (MapDocument & { spotTotal: number; spotPending: number; spotHidden: number })[];
+      const mapIds = viewable.map((m) => m._id);
+      const rows = (
+        await col
+          .aggregate([
+            { $match: { mapId: { $in: mapIds } } },
+            {
+              $group: {
+                _id: "$mapId",
+                total: { $sum: 1 },
+                pending: { $sum: { $cond: [{ $eq: ["$moderation", "pending"] }, 1, 0] } },
+                hidden: { $sum: { $cond: [{ $eq: ["$hidden", true] }, 1, 0] } },
+              },
+            },
+          ])
+          .toArray()
+      ) as { _id: string; total: number; pending: number; hidden: number }[];
+      const countsByMap = new Map(rows.map((r) => [r._id, r]));
+      withCounts = viewable.map((m) => {
+        const c = countsByMap.get(m._id);
+        return {
+          ...m,
+          spotTotal: c?.total ?? 0,
+          spotPending: c?.pending ?? 0,
+          spotHidden: c?.hidden ?? 0,
+        };
+      }) as (MapDocument & { spotTotal: number; spotPending: number; spotHidden: number })[];
     }
   } catch {
     withCounts = null;

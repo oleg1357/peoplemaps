@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS, getDb } from "@/lib/mongodb";
-import { json, toObjectId, byIdFilter } from "@/lib/api";
+import { json, toObjectId } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import { serverClient } from "@/sanity/lib/client";
 import { getServerSupabase } from "@/lib/supabase-server";
@@ -158,11 +158,18 @@ export async function GET(req: Request) {
     });
 
     const spotHexToObj = new Map<string, Spot>();
-    for (const hex of spotRefIds) {
-      const oid = toObjectId(hex);
-      if (!oid) continue;
-      const spot = await spotsCol.findOne(byIdFilter<Spot>(oid));
-      if (spot) spotHexToObj.set(hex, spot);
+    const spotOids = [...spotRefIds]
+      .map((hex) => ({ hex, oid: toObjectId(hex) }))
+      .filter((e): e is { hex: string; oid: NonNullable<ReturnType<typeof toObjectId>> } => Boolean(e.oid));
+    if (spotOids.length > 0) {
+      const found = await spotsCol
+        .find({ _id: { $in: spotOids.map((e) => e.oid) } } as unknown as Filter<Spot>)
+        .toArray();
+      const byHex = new Map(found.map((s) => [s._id!.toString(), s]));
+      for (const { hex } of spotOids) {
+        const spot = byHex.get(hex);
+        if (spot) spotHexToObj.set(hex, spot);
+      }
     }
 
     const spotMeta = (hex: string): { name: string; mapId: string } | null => {

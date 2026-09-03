@@ -4,7 +4,7 @@ PeopleMaps is a collaborative map of spots maintained by the people who use them
 
 ## Tech stack
 
-- **Next.js 14** (App Router) with TypeScript
+- **Next.js 16** (App Router) with TypeScript
 - **Leaflet / react-leaflet** for the interactive maps
 - **MongoDB** backend (option 1) with a REST API in `app/api`
 - **Supabase** for authentication (session cookie / Bearer JWT)
@@ -46,8 +46,6 @@ Open http://localhost:3000. All data is seeded into `localStorage` in demo mode.
 - `npm run dev` — start the dev server
 - `npm run build` — production build
 - `npm run lint` — ESLint
-- `npm run sanity` — Sanity Studio dev server
-- `npm run sanity-dataset-export` / `npm run sanity-deploy` / `npm run sanity-dev`
 
 ## Project structure
 

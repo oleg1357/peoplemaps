@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
 import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { logActivity } from "@/lib/activity";
 import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
 import type { Spot, ModerationStatus } from "@/lib/types";
 
@@ -46,7 +47,7 @@ export async function PATCH(req: Request) {
     if (!oid) return error("Invalid spot id");
 
     const col = db.collection<Spot>(COLLECTIONS.spots);
-    const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1 } });
+    const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Spot not found", 404);
 
     const perm = await canModerateMap(ctx, existing.mapId);
@@ -99,6 +100,28 @@ export async function PATCH(req: Request) {
     if (Object.keys(set).length === 0) return error("Nothing to update");
 
     await col.updateOne(byIdFilter<Spot>(oid), { $set: set });
+
+    const action = moderation === "approved"
+      ? "spot.approve"
+      : moderation === "rejected"
+        ? "spot.reject"
+        : moderation !== undefined
+          ? "spot.pending"
+          : hidden !== undefined
+            ? (hidden ? "spot.hide" : "spot.restore")
+            : fields
+              ? "spot.edit"
+              : "spot.update";
+    await logActivity({
+      mapId: existing.mapId,
+      actorId: ctx.userId,
+      action,
+      targetType: "spot",
+      targetId: spotId,
+      targetName: existing.name,
+      detail: JSON.stringify({ moderation, hidden }),
+    });
+
     return json({ ok: true });
   });
 }
@@ -116,7 +139,7 @@ export async function DELETE(req: Request) {
     if (!oid) return error("Invalid spot id");
 
     const col = db.collection<Spot>(COLLECTIONS.spots);
-    const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1 } });
+    const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Spot not found", 404);
 
     const perm = await canModerateMap(ctx, existing.mapId);
@@ -127,6 +150,14 @@ await col.deleteOne(byIdFilter<Spot>(oid));
     await db.collection(COLLECTIONS.photos).deleteMany({ spotId });
     await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
     await db.collection(COLLECTIONS.votes).deleteMany({ spotId });
+    await logActivity({
+      mapId: existing.mapId,
+      actorId: ctx.userId,
+      action: "spot.destroy",
+      targetType: "spot",
+      targetId: spotId,
+      targetName: existing.name,
+    });
     return NextResponse.json({ ok: true });
   });
 }

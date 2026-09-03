@@ -40,7 +40,7 @@ export default function LoginPage() {
             <h2>Log in</h2>
             <input
               className="input"
-              type="text"
+              type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +87,7 @@ export default function LoginPage() {
           </div>
           <img
             id="auth-image"
-            src="https://i.ibb.co/hL2mS5V/pin-3.png"
+            src="/pin-3.png"
             alt="PeopleMaps map pin"
           />
         </div>

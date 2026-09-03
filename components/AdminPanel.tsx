@@ -5,6 +5,9 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   fetchAdminMaps,
   fetchAdminSpots,
+  fetchAdminZones,
+  fetchAdminRoutes,
+  fetchAdminActivity,
   createMap,
   updateMapSettings,
   destroyMap,
@@ -12,15 +15,33 @@ import {
   setSpotHidden,
   updateSpotFields,
   destroySpot,
+  moderateZone,
+  setZoneHidden,
+  updateZoneFields,
+  destroyZone,
+  moderateRoute,
+  setRouteHidden,
+  updateRouteFields,
+  destroyRoute,
   fetchMapModerators,
   addMapModerator,
   removeMapModerator,
+  fetchAdminReports,
+  resolveReport,
+  fetchAdminBans,
+  banUser,
+  unbanUser,
   type AdminMapEntry,
   type AdminSpotList,
+  type AdminZoneList,
+  type AdminRouteList,
+  type ActivityEntryApi,
+  type ActivityFilter,
+  type AdminReport,
   type MapSettingsInput,
   type MapRoleEntry,
 } from "@/lib/api-client";
-import type { Spot } from "@/lib/types";
+import type { Spot, Zone, Route, MapBan } from "@/lib/types";
 import {
   MARKER_PRESETS,
   MARKER_COLORS,
@@ -34,9 +55,16 @@ import {
   IconMapMarker,
   IconPlus,
   IconTrash,
-  IconUser,
   IconX,
 } from "./icons";
+import AdminCreateMap from "./admin/AdminCreateMap";
+import AdminSpotView from "./admin/AdminSpotView";
+import AdminZonesView from "./admin/AdminZonesView";
+import AdminActivityView from "./admin/AdminActivityView";
+import AdminReportsView from "./admin/AdminReportsView";
+import AdminBansView from "./admin/AdminBansView";
+import AdminModeratorsView from "./admin/AdminModeratorsView";
+import AdminSettingsView from "./admin/AdminSettingsView";
 
 interface EditState {
   spot: Spot;
@@ -44,7 +72,7 @@ interface EditState {
 
 const DEFAULT_BASE = { lat: 55.6761, lng: 12.5683 };
 
-function MarkerPreview({
+export function MarkerPreview({
   emoji,
   color,
   size = 26,
@@ -67,7 +95,7 @@ function MarkerPreview({
   );
 }
 
-function MarkerPicker({
+export function MarkerPicker({
   emoji,
   color,
   onEmoji,
@@ -133,10 +161,31 @@ export function AdminPanel() {
   const [mapsError, setMapsError] = useState("");
 
   const [activeMap, setActiveMap] = useState<AdminMapEntry | null>(null);
-  const [view, setView] = useState<"spots" | "settings" | "moderators">("spots");
+  const [view, setView] = useState<"spots" | "zones" | "activity" | "reports" | "bans" | "settings" | "moderators">("spots");
   const [data, setData] = useState<AdminSpotList | null>(null);
   const [loadingSpots, setLoadingSpots] = useState(false);
   const [error, setError] = useState("");
+
+  const [zoneData, setZoneData] = useState<AdminZoneList | null>(null);
+  const [loadingZones, setLoadingZones] = useState(false);
+  const [routeData, setRouteData] = useState<AdminRouteList | null>(null);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [activity, setActivity] = useState<ActivityEntryApi[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityActorInput, setActivityActorInput] = useState("");
+  const [activityAction, setActivityAction] = useState("");
+  const [activityDateFrom, setActivityDateFrom] = useState("");
+  const [activityDateTo, setActivityDateTo] = useState("");
+  const [zoneEdit, setZoneEdit] = useState<Zone | null>(null);
+  const [routeEdit, setRouteEdit] = useState<Route | null>(null);
+
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [bans, setBans] = useState<MapBan[]>([]);
+  const [loadingBans, setLoadingBans] = useState(false);
+  const [banInput, setBanInput] = useState("");
+  const [banReason, setBanReason] = useState("");
+  const [banNotice, setBanNotice] = useState("");
 
   const [moderators, setModerators] = useState<MapRoleEntry[]>([]);
   const [loadingModerators, setLoadingModerators] = useState(false);
@@ -262,6 +311,107 @@ export function AdminPanel() {
     if (activeMap && view === "spots") loadSpots(activeMap._id);
   }, [activeMap, loadSpots, view]);
 
+  const loadZones = useCallback(async (mapId: string) => {
+    setLoadingZones(true);
+    setError("");
+    try {
+      const list = await fetchAdminZones(mapId);
+      setZoneData(list);
+    } catch (e) {
+      setError((e as Error).message || "Failed to load zones");
+      setZoneData(null);
+    } finally {
+      setLoadingZones(false);
+    }
+  }, []);
+
+  const loadRoutes = useCallback(async (mapId: string) => {
+    setLoadingRoutes(true);
+    try {
+      const list = await fetchAdminRoutes(mapId);
+      setRouteData(list);
+    } catch (e) {
+      setError((e as Error).message || "Failed to load routes");
+      setRouteData(null);
+    } finally {
+      setLoadingRoutes(false);
+    }
+  }, []);
+
+  const loadActivity = useCallback(async (mapId: string, filters?: ActivityFilter) => {
+    setLoadingActivity(true);
+    try {
+      const entries = await fetchAdminActivity(mapId, 100, filters);
+      setActivity(entries);
+    } catch (e) {
+      setError((e as Error).message || "Failed to load activity");
+      setActivity([]);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, []);
+
+  const applyActivityFilter = useCallback(() => {
+    if (!activeMap) return;
+    const filters: ActivityFilter = {};
+    if (activityAction) filters.action = activityAction;
+    const actor = activityActorInput.trim();
+    if (actor) filters.actorId = actor;
+    if (activityDateFrom) filters.dateFrom = new Date(activityDateFrom).toISOString();
+    if (activityDateTo) filters.dateTo = new Date(activityDateTo).toISOString();
+    loadActivity(activeMap._id, filters);
+  }, [activeMap, activityAction, activityActorInput, activityDateFrom, activityDateTo, loadActivity]);
+
+  const resetActivityFilter = useCallback(() => {
+    setActivityAction("");
+    setActivityActorInput("");
+    setActivityDateFrom("");
+    setActivityDateTo("");
+    if (activeMap) loadActivity(activeMap._id);
+  }, [activeMap, loadActivity]);
+
+  useEffect(() => {
+    if (activeMap && view === "zones") {
+      loadZones(activeMap._id);
+      loadRoutes(activeMap._id);
+    }
+  }, [activeMap, loadZones, loadRoutes, view]);
+
+  useEffect(() => {
+    if (activeMap && view === "activity") loadActivity(activeMap._id);
+  }, [activeMap, loadActivity, view]);
+
+  const loadReports = useCallback(async (mapId: string, status: "open" | "resolved" = "open") => {
+    setLoadingReports(true);
+    try {
+      setReports(await fetchAdminReports(mapId, status));
+    } catch (e) {
+      setError((e as Error).message || "Failed to load reports");
+      setReports([]);
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
+
+  const loadBans = useCallback(async (mapId: string) => {
+    setLoadingBans(true);
+    try {
+      setBans(await fetchAdminBans(mapId));
+    } catch (e) {
+      setError((e as Error).message || "Failed to load bans");
+      setBans([]);
+    } finally {
+      setLoadingBans(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeMap && (view === "reports" || view === "bans")) {
+      if (view === "reports") loadReports(activeMap._id);
+      else loadBans(activeMap._id);
+    }
+  }, [activeMap, view, loadReports, loadBans]);
+
   // True when this user can change map settings / manage moderators / delete
   // the map: the map's owner or a global admin.
   const canManageMap = isAdmin || activeMap?.role === "owner";
@@ -337,7 +487,12 @@ export function AdminPanel() {
   const refresh = useCallback(async () => {
     if (!activeMap) return;
     await loadSpots(activeMap._id);
-  }, [activeMap, loadSpots]);
+    if (view === "zones") {
+      await loadZones(activeMap._id);
+      await loadRoutes(activeMap._id);
+    }
+    if (view === "activity") await loadActivity(activeMap._id);
+  }, [activeMap, loadSpots, loadZones, loadRoutes, loadActivity, view]);
 
   const handleModerate = async (spot: Spot, moderation: "approved" | "rejected") => {
     try {
@@ -384,6 +539,98 @@ export function AdminPanel() {
     await refresh();
   };
 
+  const handleZoneModerate = async (zone: Zone, moderation: "approved" | "rejected") => {
+    try {
+      await moderateZone(zone._id!, moderation);
+    } catch (e) {
+      setError((e as Error).message || "Action failed");
+      return;
+    }
+    setZoneEdit(null);
+    await refresh();
+  };
+
+  const handleZoneToggleHidden = async (zone: Zone) => {
+    try {
+      await setZoneHidden(zone._id!, !zone.hidden);
+    } catch (e) {
+      setError((e as Error).message || "Action failed");
+      return;
+    }
+    await refresh();
+  };
+
+  const handleSaveZoneEdit = async () => {
+    if (!zoneEdit) return;
+    try {
+      await updateZoneFields(zoneEdit._id!, {
+        name: zoneEdit.name,
+        description: zoneEdit.description ?? null,
+      });
+    } catch (e) {
+      setError((e as Error).message || "Save failed");
+      return;
+    }
+    setZoneEdit(null);
+    await refresh();
+  };
+
+  const handleDestroyZone = async (zone: Zone) => {
+    try {
+      await destroyZone(zone._id!);
+    } catch (e) {
+      setError((e as Error).message || "Delete failed");
+      return;
+    }
+    await refresh();
+  };
+
+  const handleRouteModerate = async (route: Route, moderation: "approved" | "rejected") => {
+    try {
+      await moderateRoute(route._id!, moderation);
+    } catch (e) {
+      setError((e as Error).message || "Action failed");
+      return;
+    }
+    setRouteEdit(null);
+    await refresh();
+  };
+
+  const handleRouteToggleHidden = async (route: Route) => {
+    try {
+      await setRouteHidden(route._id!, !route.hidden);
+    } catch (e) {
+      setError((e as Error).message || "Action failed");
+      return;
+    }
+    await refresh();
+  };
+
+  const handleSaveRouteEdit = async () => {
+    if (!routeEdit) return;
+    try {
+      await updateRouteFields(routeEdit._id!, {
+        name: routeEdit.name,
+        description: routeEdit.description ?? null,
+      });
+    } catch (e) {
+      setError((e as Error).message || "Save failed");
+      return;
+    }
+    setRouteEdit(null);
+    await refresh();
+  };
+
+  const handleDestroyRoute = async (route: Route) => {
+    try {
+      await destroyRoute(route._id!);
+    } catch (e) {
+      setError((e as Error).message || "Delete failed");
+      return;
+    }
+    await refresh();
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeMap || !draft) return;
@@ -420,6 +667,32 @@ export function AdminPanel() {
     }
   };
 
+  const handleResolveReport = async (r: AdminReport) => {
+    if (!r._id) return;
+    await resolveReport(String(r._id));
+    setReports((prev) => prev.filter((x) => x._id !== r._id));
+  };
+
+  const handleBan = async () => {
+    if (!activeMap || !banInput.trim()) return;
+    setBanNotice("");
+    try {
+      await banUser(activeMap._id, banInput.trim(), banReason.trim());
+      setBanInput("");
+      setBanReason("");
+      setBanNotice("User banned.");
+      await loadBans(activeMap._id);
+    } catch (e) {
+      setError((e as Error).message || "Failed to ban user");
+    }
+  };
+
+  const handleUnban = async (b: MapBan) => {
+    if (!activeMap) return;
+    await unbanUser(activeMap._id, b.userId);
+    await loadBans(activeMap._id);
+  };
+
   if (!user) {
     return (
       <div className="page">
@@ -451,39 +724,17 @@ export function AdminPanel() {
         </div>
 
         {creating && (
-          <form className="admin-create-map" onSubmit={handleCreateMap}>
-            <h3>Create a new map</h3>
-            <label className="admin-field">
-              <span>Title</span>
-              <input
-                value={createTitle}
-                onChange={(e) => setCreateTitle(e.target.value)}
-                placeholder="e.g. Best Coffee in Copenhagen"
-              />
-            </label>
-            <label className="admin-field">
-              <span>Description (optional)</span>
-              <input
-                value={createDesc}
-                onChange={(e) => setCreateDesc(e.target.value)}
-                placeholder="What is this map about?"
-              />
-            </label>
-            <label className="admin-field">
-              <span>Visibility</span>
-              <select
-                value={createPublic}
-                onChange={(e) => setCreatePublic(e.target.value as "public" | "private")}
-              >
-                <option value="public">Public — anyone can view</option>
-                <option value="private">Private — owner only</option>
-              </select>
-            </label>
-            {createError && <p className="auth-error">{createError}</p>}
-            <button type="submit" className="action-btn" disabled={createBusy || !createTitle.trim()}>
-              {createBusy ? "Creating…" : "Create map"}
-            </button>
-          </form>
+          <AdminCreateMap
+            createTitle={createTitle}
+            createDesc={createDesc}
+            createPublic={createPublic}
+            createError={createError}
+            createBusy={createBusy}
+            onSubmit={handleCreateMap}
+            setCreateTitle={setCreateTitle}
+            setCreateDesc={setCreateDesc}
+            setCreatePublic={setCreatePublic}
+          />
         )}
 
         {createdMap && (
@@ -557,6 +808,38 @@ export function AdminPanel() {
                   >
                     Spots
                   </button>
+                  <button
+                    type="button"
+                    className={`admin-inner-tab ${view === "zones" ? "active" : ""}`}
+                    onClick={() => {
+                      setView("zones");
+                      setZoneEdit(null);
+                      setRouteEdit(null);
+                    }}
+                  >
+                    Zones &amp; routes
+                  </button>
+                  <button
+                    type="button"
+                    className={`admin-inner-tab ${view === "activity" ? "active" : ""}`}
+                    onClick={() => setView("activity")}
+                  >
+                    Activity
+                  </button>
+                  <button
+                    type="button"
+                    className={`admin-inner-tab ${view === "reports" ? "active" : ""}`}
+                    onClick={() => setView("reports")}
+                  >
+                    Reports
+                  </button>
+                  <button
+                    type="button"
+                    className={`admin-inner-tab ${view === "bans" ? "active" : ""}`}
+                    onClick={() => setView("bans")}
+                  >
+                    Bans
+                  </button>
                   {canManageMap && (
                     <button
                       type="button"
@@ -578,7 +861,7 @@ export function AdminPanel() {
                 </div>
 
                 {view === "spots" && (
-                  <div className="admin-section">
+                  <>
                     <div className="admin-permalink-row">
                       <span className="muted">Permalink:</span>
                       <code>{permalink(activeMap)}</code>
@@ -590,320 +873,142 @@ export function AdminPanel() {
                         {copied ? "Copied!" : "Copy"}
                       </button>
                     </div>
-                    <div className="admin-stat-row">
-                      <div className="admin-stat">
-                        <b>{data?.total ?? "–"}</b>
-                        <span>Total</span>
-                      </div>
-                      <div className="admin-stat pending">
-                        <b>{data?.pending ?? "–"}</b>
-                        <span>Pending</span>
-                      </div>
-                      <div className="admin-stat hidden">
-                        <b>{data?.hidden ?? "–"}</b>
-                        <span>Hidden</span>
-                      </div>
-                    </div>
+                    <AdminSpotView
+                      activeMap={activeMap}
+                      data={data}
+                      loadingSpots={loadingSpots}
+                      error={error}
+                      edit={edit}
+                      onStartEdit={(s) => {
+                        setEdit({ spot: { ...s } });
+                        setError("");
+                      }}
+                      onEditChange={(s) => setEdit({ spot: s })}
+                      onCancelEdit={() => setEdit(null)}
+                      onSaveEdit={handleSaveEdit}
+                      onApprove={(spot) =>
+                        spot.moderation === "pending" &&
+                        handleModerate(spot, "approved")
+                      }
+                      onReject={(spot) =>
+                        spot.moderation === "pending" &&
+                        handleModerate(spot, "rejected")
+                      }
+                      onToggleHidden={(spot) => handleToggleHidden(spot)}
+                      onDestroy={(spot) => setConfirmDestroy(spot)}
+                    />
+                  </>
+                )}
 
-                    {error && <p className="auth-error">{error}</p>}
+                {view === "zones" && (
+                  <AdminZonesView
+                    zoneData={zoneData}
+                    routeData={routeData}
+                    loadingZones={loadingZones}
+                    loadingRoutes={loadingRoutes}
+                    error={error}
+                    zoneEdit={zoneEdit}
+                    setZoneEdit={setZoneEdit}
+                    routeEdit={routeEdit}
+                    setRouteEdit={setRouteEdit}
+                    onStartZoneEdit={(z) => {
+                      setZoneEdit({ ...z });
+                      setError("");
+                    }}
+                    onSaveZoneEdit={handleSaveZoneEdit}
+                    onApproveZone={(zone) =>
+                      zone.moderation === "pending" &&
+                      handleZoneModerate(zone, "approved")
+                    }
+                    onRejectZone={(zone) =>
+                      zone.moderation === "pending" &&
+                      handleZoneModerate(zone, "rejected")
+                    }
+                    onToggleZoneHidden={(zone) => handleZoneToggleHidden(zone)}
+                    onDestroyZone={(zone) => handleDestroyZone(zone)}
+                    onStartRouteEdit={(r) => {
+                      setRouteEdit({ ...r });
+                      setError("");
+                    }}
+                    onSaveRouteEdit={handleSaveRouteEdit}
+                    onApproveRoute={(route) =>
+                      route.moderation === "pending" &&
+                      handleRouteModerate(route, "approved")
+                    }
+                    onRejectRoute={(route) =>
+                      route.moderation === "pending" &&
+                      handleRouteModerate(route, "rejected")
+                    }
+                    onToggleRouteHidden={(route) => handleRouteToggleHidden(route)}
+                    onDestroyRoute={(route) => handleDestroyRoute(route)}
+                  />
+                )}
 
-                    {loadingSpots ? (
-                      <p className="muted">Loading spots…</p>
-                    ) : (
-                      <>
-                        {data && data.spots.length === 0 && (
-                          <p className="empty-state">No spots on this map yet.</p>
-                        )}
+                {view === "activity" && (
+                  <AdminActivityView
+                    activity={activity}
+                    loadingActivity={loadingActivity}
+                    error={error}
+                    activityAction={activityAction}
+                    setActivityAction={setActivityAction}
+                    activityActorInput={activityActorInput}
+                    setActivityActorInput={setActivityActorInput}
+                    activityDateFrom={activityDateFrom}
+                    setActivityDateFrom={setActivityDateFrom}
+                    activityDateTo={activityDateTo}
+                    setActivityDateTo={setActivityDateTo}
+                    onApplyFilter={applyActivityFilter}
+                    onReset={resetActivityFilter}
+                  />
+                )}
 
-                        {data && data.spots.length > 0 && (
-                          <ul className="admin-spot-list">
-                            {data.spots.map((spot) => (
-                              <AdminSpotRow
-                                key={spot._id}
-                                spot={spot}
-                                map={activeMap}
-                                editing={edit?.spot._id === spot._id}
-                                editSpot={edit?.spot ?? null}
-                                onStartEdit={(s) => {
-                                  setEdit({ spot: { ...s } });
-                                  setError("");
-                                }}
-                                onEditChange={(s) => setEdit({ spot: s })}
-                                onCancelEdit={() => setEdit(null)}
-                                onSaveEdit={handleSaveEdit}
-                                onApprove={() =>
-                                  spot.moderation === "pending" &&
-                                  handleModerate(spot, "approved")
-                                }
-                                onReject={() =>
-                                  spot.moderation === "pending" &&
-                                  handleModerate(spot, "rejected")
-                                }
-                                onToggleHidden={() => handleToggleHidden(spot)}
-                                onDestroy={() => setConfirmDestroy(spot)}
-                              />
-                            ))}
-                          </ul>
-                        )}
-                      </>
-                    )}
-                  </div>
+                {view === "reports" && (
+                  <AdminReportsView
+                    reports={reports}
+                    loadingReports={loadingReports}
+                    onResolve={handleResolveReport}
+                  />
+                )}
+
+                {view === "bans" && (
+                  <AdminBansView
+                    bans={bans}
+                    loadingBans={loadingBans}
+                    error={error}
+                    banInput={banInput}
+                    setBanInput={setBanInput}
+                    banReason={banReason}
+                    setBanReason={setBanReason}
+                    banNotice={banNotice}
+                    onBan={handleBan}
+                    onUnban={handleUnban}
+                  />
                 )}
 
                 {view === "moderators" && (
-                  <div className="admin-section">
-                    <h3>Moderators</h3>
-                    <p className="muted">
-                      Designate people who can approve, edit and remove spots on
-                      this map. They cannot change map settings or manage other
-                      moderators.
-                    </p>
-
-                    <form className="admin-moderator-add" onSubmit={handleAddModerator}>
-                      <AdminField label="Invite a moderator by email">
-                        <div className="admin-moderator-add-row">
-                          <input
-                            type="email"
-                            value={moderatorEmail}
-                            onChange={(e) => setModeratorEmail(e.target.value)}
-                            placeholder="moderator@example.com"
-                            disabled={moderatorBusy}
-                          />
-                          <button
-                            type="submit"
-                            className="action-btn"
-                            disabled={moderatorBusy || !moderatorEmail.trim()}
-                          >
-                            <IconUser size={15} />
-                            {moderatorBusy ? "Adding…" : "Add moderator"}
-                          </button>
-                        </div>
-                      </AdminField>
-                    </form>
-
-                    {moderatorError && <p className="auth-error">{moderatorError}</p>}
-                    {moderatorNotice && (
-                      <p className="muted" style={{ color: "var(--green)" }}>
-                        {moderatorNotice}
-                      </p>
-                    )}
-
-                    {loadingModerators ? (
-                      <p className="muted">Loading moderators…</p>
-                    ) : moderators.length === 0 ? (
-                      <p className="empty-state">
-                        No moderators yet. Add people by their account email.
-                      </p>
-                    ) : (
-                      <ul className="admin-moderator-list">
-                        {moderators.map((m) => (
-                          <li key={m.userId} className="admin-moderator-row">
-                            <div className="admin-moderator-info">
-                              <IconUser size={16} />
-                              <span className="admin-moderator-name">
-                                {m.displayName || m.email || m.userId}
-                              </span>
-                              {m.displayName && m.displayName !== m.email && (
-                                <span className="muted">{m.email}</span>
-                              )}
-                            </div>
-                            <div className="admin-row-actions">
-                              <span className="muted">
-                                Added{" "}
-                                {new Date(m.addedAt).toLocaleDateString()}
-                              </span>
-                              <button
-                                type="button"
-                                className="action-btn2"
-                                onClick={() => handleRemoveModerator(m.userId)}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                  <AdminModeratorsView
+                    moderators={moderators}
+                    loadingModerators={loadingModerators}
+                    moderatorEmail={moderatorEmail}
+                    setModeratorEmail={setModeratorEmail}
+                    moderatorBusy={moderatorBusy}
+                    moderatorError={moderatorError}
+                    moderatorNotice={moderatorNotice}
+                    onAddModerator={handleAddModerator}
+                    onRemoveModerator={handleRemoveModerator}
+                  />
                 )}
 
                 {view === "settings" && draft && (
-                  <form className="admin-section" onSubmit={handleSaveSettings}>
-                    <h3>Map settings</h3>
-                    <div className="admin-edit-grid">
-                      <AdminField label="Title">
-                        <input
-                          value={draft.title ?? ""}
-                          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                        />
-                      </AdminField>
-                      <AdminField label="Visibility">
-                        <select
-                          value={draft.isPublic ?? "public"}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              isPublic: e.target.value as "public" | "private",
-                            })
-                          }
-                        >
-                          <option value="public">Public</option>
-                          <option value="private">Private</option>
-                        </select>
-                      </AdminField>
-                      <AdminField label="Description">
-                        <input
-                          value={draft.description ?? ""}
-                          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                        />
-                      </AdminField>
-                      <AdminField label="Accent color">
-                        <div className="marker-picker-colors">
-                          {MARKER_COLORS.map((c) => (
-                            <button
-                              type="button"
-                              key={c}
-                              className={`swatch ${draft.accentColor === c ? "active" : ""}`}
-                              style={{ background: c }}
-                              onClick={() => setDraft({ ...draft, accentColor: c })}
-                            />
-                          ))}
-                          <input
-                            type="color"
-                            value={getMarkerColor(draft.accentColor ?? DEFAULT_ACCENT)}
-                            onChange={(e) => setDraft({ ...draft, accentColor: e.target.value })}
-                            title="Custom color"
-                          />
-                        </div>
-                      </AdminField>
-                    </div>
-
-                    <div className="admin-panel-group">
-                      <MarkerPicker
-                        emoji={draft.defaultMarker ?? DEFAULT_MARKER.emoji}
-                        color={draft.defaultMarkerColor ?? DEFAULT_MARKER.color}
-                        onEmoji={(e) => setDraft({ ...draft, defaultMarker: e })}
-                        onColor={(c) => setDraft({ ...draft, defaultMarkerColor: c })}
-                      />
-                    </div>
-
-                    <div className="admin-panel-group">
-                      <h4>Behavior</h4>
-                      <AdminField label="Default map center (lat)">
-                        <input
-                          type="number"
-                          step="any"
-                          value={draft.baseCenter?.lat ?? DEFAULT_BASE.lat}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              baseCenter: {
-                                lat: Number(e.target.value),
-                                lng: draft.baseCenter?.lng ?? DEFAULT_BASE.lng,
-                              },
-                            })
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Default map center (lng)">
-                        <input
-                          type="number"
-                          step="any"
-                          value={draft.baseCenter?.lng ?? DEFAULT_BASE.lng}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              baseCenter: {
-                                lat: draft.baseCenter?.lat ?? DEFAULT_BASE.lat,
-                                lng: Number(e.target.value),
-                              },
-                            })
-                          }
-                        />
-                      </AdminField>
-                      <AdminField label="Default zoom">
-                        <input
-                          type="number"
-                          min={3}
-                          max={18}
-                          value={draft.baseZoom ?? 12}
-                          onChange={(e) => setDraft({ ...draft, baseZoom: Number(e.target.value) })}
-                        />
-                      </AdminField>
-                      <AdminField label="Max photos per spot (0-12)">
-                        <input
-                          type="number"
-                          min={0}
-                          max={12}
-                          value={draft.maxPhotosPerSpot ?? 6}
-                          onChange={(e) =>
-                            setDraft({ ...draft, maxPhotosPerSpot: Number(e.target.value) })
-                          }
-                        />
-                      </AdminField>
-                      <label className="admin-check">
-                        <input
-                          type="checkbox"
-                          checked={draft.requireApproval ?? true}
-                          onChange={(e) => setDraft({ ...draft, requireApproval: e.target.checked })}
-                        />
-                        Require your approval for new spots
-                      </label>
-                    </div>
-
-                    <div className="admin-panel-group">
-                      <h4>Text for visitors</h4>
-                      <AdminField label="Welcome message">
-                        <textarea
-                          rows={3}
-                          value={draft.welcomeMessage ?? ""}
-                          onChange={(e) => setDraft({ ...draft, welcomeMessage: e.target.value })}
-                          placeholder="Short banner shown on the map, e.g. “Help keep this map fresh!”"
-                        />
-                      </AdminField>
-                      <AdminField label="Add-spot instructions">
-                        <textarea
-                          rows={2}
-                          value={draft.submissionNote ?? ""}
-                          onChange={(e) => setDraft({ ...draft, submissionNote: e.target.value })}
-                          placeholder="Tip shown in the add-spot form, e.g. “Please include opening hours.”"
-                        />
-                      </AdminField>
-                    </div>
-
-                    {settingsError && <p className="auth-error">{settingsError}</p>}
-                    {settingsSaved && (
-                      <p className="muted" style={{ color: "var(--green)" }}>
-                        Settings saved.
-                      </p>
-                    )}
-                    <div className="admin-row-actions">
-                      <button
-                        type="submit"
-                        className="action-btn"
-                        disabled={savingSettings || !activeMap}
-                      >
-                        {savingSettings ? "Saving…" : "Save settings"}
-                      </button>
-                    </div>
-
-                    <div className="admin-danger-zone">
-                      <div>
-                        <strong>Danger zone</strong>
-                        <p className="muted">
-                          Delete the map, all its spots, reviews, photos and
-                          comments. This cannot be undone.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="action-btn danger"
-                        onClick={() => setConfirmDeleteMap(true)}
-                      >
-                        <IconTrash size={15} /> Delete map
-                      </button>
-                    </div>
-                  </form>
+                  <AdminSettingsView
+                    draft={draft}
+                    setDraft={setDraft}
+                    savingSettings={savingSettings}
+                    settingsSaved={settingsSaved}
+                    settingsError={settingsError}
+                    onSubmit={handleSaveSettings}
+                    onDeleteMap={() => setConfirmDeleteMap(true)}
+                  />
                 )}
               </>
             )}
@@ -958,7 +1063,7 @@ export function AdminPanel() {
   );
 }
 
-function AdminSpotRow({
+export function AdminSpotRow({
   spot,
   map,
   editing,
@@ -1131,7 +1236,225 @@ function AdminSpotRow({
   );
 }
 
-function AdminField({ label, children }: { label: string; children: React.ReactNode }) {
+export function ZoneAdminRow({
+  zone,
+  editing,
+  editZone,
+  onStartEdit,
+  onEditChange,
+  onCancelEdit,
+  onSaveEdit,
+  onApprove,
+  onReject,
+  onToggleHidden,
+  onDestroy,
+}: {
+  zone: Zone;
+  editing: boolean;
+  editZone: Zone | null;
+  onStartEdit: (z: Zone) => void;
+  onEditChange: (z: Zone) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onToggleHidden: () => void;
+  onDestroy: () => void;
+}) {
+  const pending = zone.moderation === "pending";
+
+  if (editing && editZone) {
+    return (
+      <li className="admin-spot edit">
+        <div className="admin-edit-grid">
+          <AdminField label="Name">
+            <input
+              value={editZone.name}
+              onChange={(e) => onEditChange({ ...editZone, name: e.target.value })}
+            />
+          </AdminField>
+          <AdminField label="Description">
+            <input
+              value={editZone.description ?? ""}
+              onChange={(e) =>
+                onEditChange({ ...editZone, description: e.target.value })
+              }
+            />
+          </AdminField>
+        </div>
+        <div className="admin-row-actions">
+          <button type="button" className="action-btn" onClick={onSaveEdit}>
+            <IconCheck size={15} /> Save
+          </button>
+          <button type="button" className="action-btn2" onClick={onCancelEdit}>
+            Cancel
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className={`admin-spot ${pending ? "pending" : ""} ${zone.hidden ? "hidden" : ""}`}>
+      <div className="admin-spot-main">
+        <div className="admin-spot-title">
+          <span
+            className="admin-color-swatch"
+            style={{ background: zone.color ? getMarkerColor(zone.color) : "#888" }}
+          />
+          <span className="admin-spot-name">{zone.name}</span>
+          <span className="admin-spot-chip">{zone.shape}</span>
+          <span className={`admin-spot-chip ${zone.moderation ?? "legacy"}`}>
+            {zone.moderation ?? "visible"}
+          </span>
+          {zone.hidden && <span className="admin-spot-chip hidden">hidden</span>}
+        </div>
+        <div className="admin-spot-sub">
+          {zone.shape === "polygon"
+            ? `${zone.points?.length ?? 0} vertices`
+            : `circle r=${Math.round(zone.radius ?? 0)}m`}
+          {zone.createdAt && ` · ${new Date(zone.createdAt).toLocaleDateString()}`}
+        </div>
+      </div>
+      <div className="admin-row-actions">
+        {pending && (
+          <>
+            <button type="button" className="action-btn" onClick={onApprove}>
+              <IconCheck size={15} /> Approve
+            </button>
+            <button type="button" className="action-btn reject" onClick={onReject}>
+              <IconX size={15} /> Reject
+            </button>
+          </>
+        )}
+        <button type="button" className="action-btn2" onClick={() => onStartEdit(zone)}>
+          Edit
+        </button>
+        <button type="button" className="action-btn2" onClick={onToggleHidden}>
+          {zone.hidden ? "Restore" : "Hide"}
+        </button>
+        <button
+          type="button"
+          className="icon-btn danger"
+          onClick={onDestroy}
+          aria-label="Destroy zone"
+        >
+          <IconTrash size={16} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+export function RouteAdminRow({
+  route,
+  editing,
+  editRoute,
+  onStartEdit,
+  onEditChange,
+  onCancelEdit,
+  onSaveEdit,
+  onApprove,
+  onReject,
+  onToggleHidden,
+  onDestroy,
+}: {
+  route: Route;
+  editing: boolean;
+  editRoute: Route | null;
+  onStartEdit: (r: Route) => void;
+  onEditChange: (r: Route) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onToggleHidden: () => void;
+  onDestroy: () => void;
+}) {
+  const pending = route.moderation === "pending";
+
+  if (editing && editRoute) {
+    return (
+      <li className="admin-spot edit">
+        <div className="admin-edit-grid">
+          <AdminField label="Name">
+            <input
+              value={editRoute.name}
+              onChange={(e) => onEditChange({ ...editRoute, name: e.target.value })}
+            />
+          </AdminField>
+          <AdminField label="Description">
+            <input
+              value={editRoute.description ?? ""}
+              onChange={(e) =>
+                onEditChange({ ...editRoute, description: e.target.value })
+              }
+            />
+          </AdminField>
+        </div>
+        <div className="admin-row-actions">
+          <button type="button" className="action-btn" onClick={onSaveEdit}>
+            <IconCheck size={15} /> Save
+          </button>
+          <button type="button" className="action-btn2" onClick={onCancelEdit}>
+            Cancel
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className={`admin-spot ${pending ? "pending" : ""} ${route.hidden ? "hidden" : ""}`}>
+      <div className="admin-spot-main">
+        <div className="admin-spot-title">
+          <span
+            className="admin-color-swatch"
+            style={{ background: route.color ? getMarkerColor(route.color) : "#888" }}
+          />
+          <span className="admin-spot-name">{route.name}</span>
+          <span className="admin-spot-chip">route</span>
+          <span className={`admin-spot-chip ${route.moderation ?? "legacy"}`}>
+            {route.moderation ?? "visible"}
+          </span>
+          {route.hidden && <span className="admin-spot-chip hidden">hidden</span>}
+        </div>
+        <div className="admin-spot-sub">
+          {`${route.points?.length ?? 0} points`}
+          {route.createdAt && ` · ${new Date(route.createdAt).toLocaleDateString()}`}
+        </div>
+      </div>
+      <div className="admin-row-actions">
+        {pending && (
+          <>
+            <button type="button" className="action-btn" onClick={onApprove}>
+              <IconCheck size={15} /> Approve
+            </button>
+            <button type="button" className="action-btn reject" onClick={onReject}>
+              <IconX size={15} /> Reject
+            </button>
+          </>
+        )}
+        <button type="button" className="action-btn2" onClick={() => onStartEdit(route)}>
+          Edit
+        </button>
+        <button type="button" className="action-btn2" onClick={onToggleHidden}>
+          {route.hidden ? "Restore" : "Hide"}
+        </button>
+        <button
+          type="button"
+          className="icon-btn danger"
+          onClick={onDestroy}
+          aria-label="Destroy route"
+        >
+          <IconTrash size={16} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+export function AdminField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="admin-field">
       <span>{label}</span>

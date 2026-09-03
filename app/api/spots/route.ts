@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
+import { withDb, json, error, toObjectId, byIdFilter, publicContentFilter } from "@/lib/api";
 import { getAdminContext, getMap, isGlobalAdmin, canModerateMap, isMapModerator } from "@/lib/admin";
-import { sanitizeMarkerEmoji } from "@/lib/markers-data";
-import type { Spot } from "@/lib/types";
-import type { Filter } from "mongodb";
+import { logActivity } from "@/lib/activity";
+import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
+import type { Spot, MapBan } from "@/lib/types";
+import type { Filter, Db } from "mongodb";
+
+// True when the user is banned from contributing to this map.
+async function isBanned(db: Db, mapId: string, userId: string): Promise<boolean> {
+  return !!(
+    await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId })
+  );
+}
 
 // Public (map-visible) spots: approved or pre-moderation, never hidden.
 function publicSpotsQuery(mapId: string): Filter<Spot> {
-  return {
-    mapId,
-    $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
-    hidden: { $ne: true },
-  };
+  return publicContentFilter<Spot>(mapId);
 }
 
 // GET /api/spots?mapId=<mapId>  -> all spots for a map
@@ -37,7 +41,9 @@ export async function GET(req: Request) {
       .find(publicSpotsQuery(mapId))
       .sort({ createdAt: -1 })
       .toArray();
-    return json(spots);
+    return json(spots, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
+    });
   });
 }
 
@@ -55,6 +61,7 @@ export async function POST(req: Request) {
   if (!ctx.userId) {
     return error("You must be signed in to add a spot.", 401);
   }
+  const userId = ctx.userId;
 
   let moderation: Spot["moderation"] = "pending";
   const map = await getMap(mapId);
@@ -83,7 +90,7 @@ export async function POST(req: Request) {
     zip: Number(body.zip ?? 0),
     lat: Number(body.lat),
     lng: Number(body.lng),
-    createdBy: ctx.userId,
+    createdBy: userId,
     createdAt: new Date().toISOString(),
     moderation,
     hidden: false,
@@ -91,6 +98,9 @@ export async function POST(req: Request) {
     marker: marker ?? undefined,
   };
   return withDb(async (db) => {
+    if (await isBanned(db, mapId, userId)) {
+      return error("You are banned from contributing to this map.", 403);
+    }
     const col = db.collection<Spot>(COLLECTIONS.spots);
     const result = await col.insertOne(spot);
     // Return the updated public list so the map can refresh without a
@@ -110,6 +120,7 @@ export async function DELETE(req: Request) {
 
   const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in to delete a spot.", 401);
+  const userId = ctx.userId;
 
   return withDb(async (db) => {
     const oid = toObjectId(spotId);
@@ -119,8 +130,11 @@ export async function DELETE(req: Request) {
       projection: { mapId: 1, createdBy: 1 },
     });
     if (!existing) return error("Spot not found", 404);
+    if (await isBanned(db, existing.mapId, userId)) {
+      return error("You are banned from contributing to this map.", 403);
+    }
     // Only the submitter, the map owner or a global admin may delete a spot.
-    if (existing.createdBy !== ctx.userId) {
+    if (existing.createdBy !== userId) {
       const perm = await canModerateMap(ctx, existing.mapId);
       if (!perm.ok) return error(perm.reason || "Forbidden", 403);
     }
@@ -130,5 +144,92 @@ await col.deleteOne(byIdFilter<Spot>(oid));
     await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
     await db.collection(COLLECTIONS.votes).deleteMany({ spotId });
     return NextResponse.json({ ok: true });
+  });
+}
+
+// PATCH /api/spots  -> a submitter edits their own spot (or a moderator/admin edits any)
+export async function PATCH(req: Request) {
+  const ctx = await getAdminContext(req);
+  if (!ctx.userId) return error("You must be signed in to edit a spot.", 401);
+  const userId = ctx.userId;
+
+  const body = (await req.json()) as {
+    spotId?: string;
+    name?: string;
+    street?: string;
+    city?: string;
+    zip?: number;
+    lat?: number;
+    lng?: number;
+    marker?: string | null;
+    markerColor?: string | null;
+  };
+  if (!body.spotId) return error("Missing spotId");
+  const spotId = body.spotId;
+
+  return withDb(async (db) => {
+    const oid = toObjectId(spotId);
+    if (!oid) return error("Invalid spot id");
+    const col = db.collection<Spot>(COLLECTIONS.spots);
+    const existing = await col.findOne(byIdFilter<Spot>(oid), {
+      projection: { mapId: 1, createdBy: 1, name: 1 },
+    });
+    if (!existing) return error("Spot not found", 404);
+
+    if (await isBanned(db, existing.mapId, userId)) {
+      return error("You are banned from contributing to this map.", 403);
+    }
+
+    // The submitter may edit their own spot; otherwise a moderator/admin may.
+    if (existing.createdBy !== userId) {
+      const perm = await canModerateMap(ctx, existing.mapId);
+      if (!perm.ok) return error("You can only edit your own spots.", 403);
+    }
+
+    const set: Record<string, unknown> = {};
+    const num = (v: unknown) => (typeof v === "number" ? v : Number(v));
+    if (body.name !== undefined) {
+      const n = String(body.name).trim();
+      if (!n) return error("Spot name is required.");
+      set.name = n;
+    }
+    if (body.street !== undefined) set.street = String(body.street ?? "");
+    if (body.city !== undefined) set.city = String(body.city ?? "");
+    if (body.zip !== undefined) set.zip = Number.isFinite(num(body.zip)) ? num(body.zip) : 0;
+    if (body.lat !== undefined) {
+      const lat = num(body.lat);
+      if (!Number.isFinite(lat) || lat < -90 || lat > 90) return error("Invalid latitude.");
+      set.lat = lat;
+    }
+    if (body.lng !== undefined) {
+      const lng = num(body.lng);
+      if (!Number.isFinite(lng) || lng < -180 || lng > 180) return error("Invalid longitude.");
+      set.lng = lng;
+    }
+    if (body.marker !== undefined) {
+      const marker = sanitizeMarkerEmoji(String(body.marker ?? ""));
+      if (body.marker !== null && !marker) return error("Unknown marker.");
+      set.marker = marker;
+    }
+    if (body.markerColor !== undefined) {
+      if (body.markerColor !== null && !hasValidColor(String(body.markerColor))) {
+        return error("Invalid marker color.");
+      }
+      set.markerColor = body.markerColor;
+    }
+
+    if (Object.keys(set).length === 0) return error("Nothing to update");
+
+    await col.updateOne(byIdFilter<Spot>(oid), { $set: set });
+    await logActivity({
+      mapId: existing.mapId,
+      actorId: userId,
+      action: "spot.edit_self",
+      targetType: "spot",
+      targetId: body.spotId,
+      targetName: existing.name,
+    });
+    const spot = await col.findOne(byIdFilter<Spot>(oid));
+    return json({ ok: true, spot });
   });
 }

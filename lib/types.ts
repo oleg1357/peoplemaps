@@ -221,6 +221,29 @@ export interface ProfilePhotoContribution {
   date: string;
 }
 
+// A user-submitted flag on a spot, resolved by a moderator.
+export interface SpotReport {
+  _id?: string;
+  spotId: string;
+  mapId: string;
+  reporterId: string;
+  reason: string;
+  spotName?: string;
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+// A user banned from contributing to a specific map.
+export interface MapBan {
+  _id?: string;
+  mapId: string;
+  userId: string;
+  reason: string;
+  bannedBy: string;
+  createdAt: string;
+}
+
 export interface ProfileData {
   user: ProfileUser;
   stats: ProfileStats;

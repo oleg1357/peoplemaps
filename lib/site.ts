@@ -31,5 +31,5 @@ export const SITE_KEYWORDS = [
 export const SITE_TWITTER_HANDLE = "@peoplemaps";
 
 // Open Graph image. Place a real image at public/og.png (1200x630) when
-// available; currently falls back to null so Next renders the default.
-export const SITE_OG_IMAGE = "/og.png";
+// available; falls back to null so Next renders the default.
+export const SITE_OG_IMAGE = "/icon.svg";

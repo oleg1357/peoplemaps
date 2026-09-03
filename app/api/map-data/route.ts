@@ -1,5 +1,5 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error } from "@/lib/api";
+import { withDb, json, error, publicContentFilter } from "@/lib/api";
 import type { Spot, Review, ReviewComment, SpotPhoto, Zone, Route } from "@/lib/types";
 
 // GET /api/map-data?mapId=<id>
@@ -15,33 +15,21 @@ export async function GET(req: Request) {
     // and are not hidden. Pending and rejected spots are hidden from public views.
     const spots = await db
       .collection<Spot>(COLLECTIONS.spots)
-      .find({
-        mapId,
-        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
-        hidden: { $ne: true },
-      })
+      .find(publicContentFilter<Spot>(mapId))
       .sort({ createdAt: -1 })
       .toArray();
 
     // Public zones (same approval rule as spots).
     const zones = await db
       .collection<Zone>(COLLECTIONS.zones)
-      .find({
-        mapId,
-        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
-        hidden: { $ne: true },
-      })
+      .find(publicContentFilter<Zone>(mapId))
       .sort({ createdAt: -1 })
       .toArray();
 
     // Public routes (same approval rule as spots).
     const routes = await db
       .collection<Route>(COLLECTIONS.routes)
-      .find({
-        mapId,
-        $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
-        hidden: { $ne: true },
-      })
+      .find(publicContentFilter<Route>(mapId))
       .sort({ createdAt: -1 })
       .toArray();
 

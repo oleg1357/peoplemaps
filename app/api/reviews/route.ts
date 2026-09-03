@@ -3,6 +3,9 @@ import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter, getOptionalContext } from "@/lib/api";
 import type { Review } from "@/lib/types";
 
+const MIN_SCORE = 0;
+const MAX_SCORE = 5;
+
 // GET /api/reviews?spotId=<id>
 // POST /api/reviews  -> add review
 export async function GET(req: Request) {
@@ -12,7 +15,9 @@ export async function GET(req: Request) {
   return withDb(async (db) => {
     const col = db.collection<Review>(COLLECTIONS.reviews);
     const reviews = await col.find({ spotId }).sort({ date: -1 }).toArray();
-    return json(reviews);
+    return json(reviews, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
+    });
   });
 }
 
@@ -20,10 +25,12 @@ export async function POST(req: Request) {
   const ctx = await getOptionalContext(req);
   const body = await req.json();
   if (!body.spotId) return error("Missing spotId");
+  const score = Math.max(MIN_SCORE, Math.min(MAX_SCORE, Math.round(Number(body.score ?? 0))));
+  if (!Number.isFinite(score)) return error(`Score must be between ${MIN_SCORE} and ${MAX_SCORE}`);
   const review: Review = {
     spotId: body.spotId,
     review: String(body.review ?? ""),
-    score: Number(body.score ?? 0),
+    score,
     date: new Date().toISOString().slice(0, 10),
     // Server-resolved identity wins; body user_fk is only a fallback so legacy
     // clients (demo mode) keep attribution without being able to spoof.
@@ -50,12 +57,14 @@ export async function PATCH(req: Request) {
     if (existing.user_fk !== ctx.userId) {
       return error("You can only edit your own reviews.", 403);
     }
+    const score = Math.max(MIN_SCORE, Math.min(MAX_SCORE, Math.round(Number(body.score ?? 0))));
+    if (!Number.isFinite(score)) return error(`Score must be between ${MIN_SCORE} and ${MAX_SCORE}`);
     await col.updateOne(
       byIdFilter<Review>(oid),
       {
         $set: {
           review: String(body.review ?? ""),
-          score: Number(body.score ?? 0),
+          score,
         },
       }
     );

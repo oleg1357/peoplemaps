@@ -12,6 +12,8 @@ import type {
   ProfileData,
   Zone,
   Route,
+  SpotReport,
+  MapBan,
 } from "./types";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
@@ -95,6 +97,29 @@ export async function createSpot(input: Omit<Spot, "_id" | "createdAt">): Promis
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+// A submitter edits their own spot (moderators/admins may edit any spot on a
+// map they moderate). Returns the refreshed spot document.
+export async function updateOwnSpot(
+  spotId: string,
+  fields: {
+    name?: string;
+    street?: string;
+    city?: string;
+    zip?: number;
+    lat?: number;
+    lng?: number;
+    marker?: string | null;
+    markerColor?: string | null;
+  }
+): Promise<Spot | null> {
+  if (!backendLive) return null;
+  const res = await req<{ ok: boolean; spot: Spot | null }>("/api/spots", {
+    method: "PATCH",
+    body: JSON.stringify({ spotId, ...fields }),
+  });
+  return res.spot;
 }
 
 export async function deleteSpot(spotId: string): Promise<void> {
@@ -235,8 +260,8 @@ export async function addSpotPhoto(spotId: string, dataUrl: string, userId?: str
 
 export async function getSpotPhotosCountApi(spotId: string): Promise<number> {
   if (!backendLive) return 0;
-  const photos = await fetchPhotos(spotId);
-  return photos.length;
+  const res = await req<{ count: number }>(`/api/photos/count?spotId=${encodeURIComponent(spotId)}`);
+  return res.count;
 }
 
 // ---- Admin (map owners / moderators / global admins) ----
@@ -382,6 +407,175 @@ export async function removeMapModerator(
     `/api/admin/maps/roles?mapId=${encodeURIComponent(mapId)}&userId=${encodeURIComponent(userId)}`,
     { method: "DELETE" }
   );
+}
+
+// ---- Admin: zones & routes ----
+export interface AdminZoneList {
+  zones: Zone[];
+  pending: number;
+  hidden: number;
+  total: number;
+}
+
+export interface AdminRouteList {
+  routes: Route[];
+  pending: number;
+  hidden: number;
+  total: number;
+}
+
+export async function fetchAdminZones(mapId: string): Promise<AdminZoneList | null> {
+  if (!backendLive) return null;
+  return req<AdminZoneList>(`/api/admin/zones?mapId=${encodeURIComponent(mapId)}`);
+}
+
+export async function fetchAdminRoutes(mapId: string): Promise<AdminRouteList | null> {
+  if (!backendLive) return null;
+  return req<AdminRouteList>(`/api/admin/routes?mapId=${encodeURIComponent(mapId)}`);
+}
+
+export async function moderateZone(
+  zoneId: string,
+  moderation: ModerationStatus
+): Promise<void> {
+  await req("/api/admin/zones", {
+    method: "PATCH",
+    body: JSON.stringify({ zoneId, moderation }),
+  });
+}
+
+export async function setZoneHidden(zoneId: string, hidden: boolean): Promise<void> {
+  await req("/api/admin/zones", {
+    method: "PATCH",
+    body: JSON.stringify({ zoneId, hidden }),
+  });
+}
+
+export async function updateZoneFields(
+  zoneId: string,
+  fields: { name?: string; description?: string | null }
+): Promise<void> {
+  await req("/api/admin/zones", {
+    method: "PATCH",
+    body: JSON.stringify({ zoneId, ...fields }),
+  });
+}
+
+export async function destroyZone(zoneId: string): Promise<void> {
+  await req(`/api/admin/zones?zoneId=${encodeURIComponent(zoneId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function moderateRoute(
+  routeId: string,
+  moderation: ModerationStatus
+): Promise<void> {
+  await req("/api/admin/routes", {
+    method: "PATCH",
+    body: JSON.stringify({ routeId, moderation }),
+  });
+}
+
+export async function setRouteHidden(routeId: string, hidden: boolean): Promise<void> {
+  await req("/api/admin/routes", {
+    method: "PATCH",
+    body: JSON.stringify({ routeId, hidden }),
+  });
+}
+
+export async function updateRouteFields(
+  routeId: string,
+  fields: { name?: string; description?: string | null }
+): Promise<void> {
+  await req("/api/admin/routes", {
+    method: "PATCH",
+    body: JSON.stringify({ routeId, ...fields }),
+  });
+}
+
+export async function destroyRoute(routeId: string): Promise<void> {
+  await req(`/api/admin/routes?routeId=${encodeURIComponent(routeId)}`, {
+    method: "DELETE",
+  });
+}
+
+// ---- Admin: activity log (audit trail) ----
+export interface ActivityEntryApi {
+  _id?: string;
+  mapId: string;
+  actorId: string | null;
+  action: string;
+  targetType: "spot" | "zone" | "route" | "map";
+  targetId?: string | null;
+  targetName?: string | null;
+  detail?: string | null;
+  createdAt: string;
+}
+
+export interface ActivityFilter {
+  action?: string;
+  actorId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function fetchAdminActivity(
+  mapId: string,
+  limit?: number,
+  filters?: ActivityFilter
+): Promise<ActivityEntryApi[]> {
+  if (!backendLive) return [];
+  const params = new URLSearchParams({ mapId });
+  if (limit) params.set("limit", String(limit));
+  if (filters?.action) params.set("action", filters.action);
+  if (filters?.actorId) params.set("actorId", filters.actorId);
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  const res = await req<{ entries: ActivityEntryApi[] }>(`/api/admin/activity?${params.toString()}`);
+  return res.entries;
+}
+
+// ---- Reports & bans ----
+export type AdminReport = SpotReport;
+
+export async function reportSpot(spotId: string, reason: string): Promise<{ ok: boolean; alreadyReported: boolean }> {
+  if (!backendLive) return { ok: false, alreadyReported: false };
+  return req<{ ok: boolean; alreadyReported: boolean }>("/api/spots/report", {
+    method: "POST",
+    body: JSON.stringify({ spotId, reason }),
+  });
+}
+
+export async function fetchAdminReports(mapId: string, status: "open" | "resolved" = "open"): Promise<AdminReport[]> {
+  if (!backendLive) return [];
+  const res = await req<{ reports: AdminReport[] }>(
+    `/api/admin/reports?mapId=${encodeURIComponent(mapId)}&status=${status}`
+  );
+  return res.reports;
+}
+
+export async function resolveReport(reportId: string): Promise<void> {
+  if (!backendLive) return;
+  await req("/api/admin/reports", { method: "PATCH", body: JSON.stringify({ reportId, action: "resolve" }) });
+}
+
+export async function fetchAdminBans(mapId: string): Promise<MapBan[]> {
+  if (!backendLive) return [];
+  const res = await req<{ bans: MapBan[] }>(`/api/admin/bans?mapId=${encodeURIComponent(mapId)}`);
+  return res.bans;
+}
+
+export async function banUser(mapId: string, userId: string, reason: string): Promise<void> {
+  if (!backendLive) return;
+  await req("/api/admin/bans", { method: "POST", body: JSON.stringify({ mapId, userId, reason }) });
+}
+
+export async function unbanUser(mapId: string, userId: string): Promise<void> {
+  if (!backendLive) return;
+  await req(`/api/admin/bans?mapId=${encodeURIComponent(mapId)}&userId=${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
 }
 
 // ---- Profile (own contributions) ----
