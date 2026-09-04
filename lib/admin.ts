@@ -65,6 +65,35 @@ const MAP_PROJECTION = `{
   enableClustering,
 }`;
 
+// Fetches all public maps, newest first. Used by the public map client (via the
+// /api/maps route) and the homepage.
+export async function getAllPublicMaps(): Promise<MapDocument[]> {
+  if (!serverClient) return [];
+  try {
+    const docs = await serverClient.fetch<MapDocument[]>(
+      `*[_type == "map" && isPublic == "public"] | order(_createdAt desc)${MAP_PROJECTION}`
+    );
+    return docs ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// Fetches all maps owned by a user (any visibility). Used by the admin panel's
+// map list via the /api/maps route.
+export async function getMapsByOwner(ownerId: string): Promise<MapDocument[]> {
+  if (!serverClient) return [];
+  try {
+    const docs = await serverClient.fetch<MapDocument[]>(
+      `*[_type == "map" && ownerId == $ownerId] | order(_createdAt desc)${MAP_PROJECTION}`,
+      { ownerId }
+    );
+    return docs ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // Fetches a map document from Sanity. Returns null if the map doesn't exist.
 export async function getMap(mapId: string): Promise<MapDocument | null> {
   if (!serverClient) return null;

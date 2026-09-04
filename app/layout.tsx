@@ -7,6 +7,7 @@ import "./styles/responsive.css";
 import "./styles/home.css";
 import "./styles/admin.css";
 import "./styles/profile.css";
+import "./styles/dashboard.css";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";

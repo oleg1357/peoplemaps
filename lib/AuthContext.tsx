@@ -40,7 +40,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const GUEST_ONLY = ["/login", "/signup"];
-const PROTECTED = ["/profile"];
+const PROTECTED = ["/profile", "/admin", "/dashboard"];
 
 // Minimal shape used across the app for a signed-in user.
 function supabaseUserToAppUser(sbUser: {

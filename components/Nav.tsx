@@ -110,11 +110,8 @@ export function Nav() {
         </Link>
         {user ? (
           <>
-            <Link href="/profile" className={cls("/profile")} aria-current={current("/profile")} onClick={close}>
-              Profile
-            </Link>
-            <Link href="/admin" className={cls("/admin")} aria-current={current("/admin")} onClick={close}>
-              Admin
+            <Link href="/dashboard" className={cls("/dashboard")} aria-current={current("/dashboard")} onClick={close}>
+              Dashboard
             </Link>
             <a
               id="log-out"

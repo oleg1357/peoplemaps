@@ -709,7 +709,7 @@ export function MapsHomePage({
 
       {maps.length === 0 && !adding && (
         <div id="map-note">
-          No maps available yet. Create your first map from <a href="/admin">Map Admin</a>.
+          No maps available yet. Create your first map from <a href="/dashboard">your dashboard</a>.
         </div>
       )}
 

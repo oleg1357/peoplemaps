@@ -1,0 +1,88 @@
+/* Unified dashboard: shared identity header + Profile/Admin tabs */
+
+.dash-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dash-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 0 16px;
+}
+
+.dash-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dash-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent, #3b82f6), var(--accent-2, #8b5cf6));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dash-identity-info h1 {
+  margin: 0 0 2px;
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.dash-identity-info p {
+  margin: 0;
+}
+
+.dash-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.dash-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-soft, var(--muted));
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px;
+}
+
+.dash-tab:hover {
+  color: var(--ink);
+}
+
+.dash-tab.active {
+  color: var(--accent, #3b82f6);
+  border-color: var(--border);
+  border-bottom-color: var(--accent, #3b82f6);
+  background: var(--surface);
+}
+
+.dash-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

@@ -48,19 +48,18 @@ export function useMaps(ownerId?: string | null): {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!client) {
-      setMaps([]);
-      return;
-    }
     let active = true;
     setLoading(true);
-    const query = ownerId
-      ? `*[_type == "map" && ownerId == $ownerId] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`
-      : `*[_type == "map" && isPublic == "public"] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`;
-    client
-      .fetch(query, ownerId ? { ownerId } : {})
+    // Fetch through our own API route so the browser never talks to Sanity
+    // directly. That avoids Sanity's per-origin CORS allow-list, which blocked
+    // this hook in production (the deployed origin wasn't whitelisted -> 403).
+    fetch(`/api/maps${ownerId ? `?owner=${encodeURIComponent(ownerId)}` : ""}`)
+      .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (active) setMaps((data as MapDocument[]) ?? []);
+      })
+      .catch(() => {
+        if (active) setMaps([]);
       })
       .finally(() => {
         if (active) setLoading(false);

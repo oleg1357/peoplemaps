@@ -701,17 +701,14 @@ export function AdminPanel() {
 
   if (!user) {
     return (
-      <div className="page">
-        <div className="admin-empty">
-          <p>You must be signed in to manage maps.</p>
-        </div>
+      <div className="admin-empty">
+        <p>You must be signed in to manage maps.</p>
       </div>
     );
   }
 
   return (
-    <div className="page">
-      <div className="admin-shell">
+    <div className="admin-shell">
         <div className="admin-head">
           <h1>Map Admin</h1>
           <p className="muted">
@@ -1066,7 +1063,6 @@ export function AdminPanel() {
           </div>
         )}
       </div>
-    </div>
   );
 }
 
