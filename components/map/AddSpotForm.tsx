@@ -6,6 +6,7 @@ interface MapLike {
   _id: string;
   accentColor?: string | null;
   submissionNote?: string | null;
+  collaborationMode?: "anyone" | "loggedIn" | "invitedOnly" | null;
 }
 
 interface AddSpotFormProps {
@@ -43,6 +44,16 @@ export function AddSpotForm({
           }}
         >
           {activeMap.submissionNote}
+        </div>
+      )}
+      {activeMap?.collaborationMode === "invitedOnly" && (
+        <div
+          className="map-submit-note"
+          style={{
+            borderLeftColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
+          }}
+        >
+          This map only accepts spots from the owner and moderators.
         </div>
       )}
       <div className="marker-picker-inline">

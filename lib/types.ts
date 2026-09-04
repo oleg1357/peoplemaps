@@ -144,6 +144,15 @@ export interface MapDocument {
   submissionNote?: string | null;
   maxPhotosPerSpot?: number | null;
   requireApproval?: boolean | null;
+  // New per-map settings
+  coverImage?: { _type: string; asset?: { _ref?: string } } | null;
+  contactEmail?: string | null;
+  website?: string | null;
+  allowReviews?: boolean | null;
+  allowComments?: boolean | null;
+  allowPhotos?: boolean | null;
+  collaborationMode?: "anyone" | "loggedIn" | "invitedOnly" | null;
+  enableClustering?: boolean | null;
 }
 
 // ---- Profile / "my contributions" (served by GET /api/me) ----
@@ -172,8 +181,10 @@ export interface OwnedMapSummary {
   _id: string;
   title: string;
   slug: string | null;
+  description?: string;
   accentColor: string | null;
   spotCount: number;
+  coverUrl?: string | null;
 }
 
 export interface ProfileSpotContribution {

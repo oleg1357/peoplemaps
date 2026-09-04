@@ -22,6 +22,9 @@ interface SpotDetailPanelProps {
   status: SpotStatus;
   onStatus: (s: SpotStatus) => void;
   userId: string | null;
+  allowReviews?: boolean;
+  allowComments?: boolean;
+  allowPhotos?: boolean;
   editingSpot: boolean;
   setEditingSpot: (v: boolean) => void;
   startEditSpot: (spot: Spot) => void;
@@ -74,6 +77,9 @@ export function SpotDetailPanel({
   status,
   onStatus,
   userId,
+  allowReviews,
+  allowComments,
+  allowPhotos,
   editingSpot,
   setEditingSpot,
   startEditSpot,
@@ -238,27 +244,33 @@ export function SpotDetailPanel({
           </form>
         ) : !editing ? (
           <>
-            <h3>Add a review</h3>
-            <textarea
-              value={reviewText}
-              onChange={(e) => setReviewText(e.target.value)}
-              placeholder="How was your visit?"
-              rows={2}
-              style={{ width: "100%" }}
-            />
-            <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "8px 0" }}>
-              <span>Score</span>
-              <select value={reviewScore} onChange={(e) => setReviewScore(Number(e.target.value))}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="action-btn2" onClick={handleSaveReview}>
-                Submit review
-              </button>
-            </div>
+            {allowReviews === false ? (
+              <p className="italic muted">Reviews are disabled for this map.</p>
+            ) : (
+              <>
+                <h3>Add a review</h3>
+                <textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  placeholder="How was your visit?"
+                  rows={2}
+                  style={{ width: "100%" }}
+                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "8px 0" }}>
+                  <span>Score</span>
+                  <select value={reviewScore} onChange={(e) => setReviewScore(Number(e.target.value))}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="action-btn2" onClick={handleSaveReview}>
+                    Submit review
+                  </button>
+                </div>
+              </>
+            )}
 
             <div id="reviews-box">
               {bundle.reviews.map((r) => (
@@ -273,7 +285,7 @@ export function SpotDetailPanel({
                     <button type="button" className="helpful-btn" onClick={() => r._id && handleVote(r._id)}>
                       Helpful
                     </button>
-                    {r._id && (
+                    {r._id && allowComments !== false && (
                       <button
                         type="button"
                         className="link-btn"
@@ -343,7 +355,7 @@ export function SpotDetailPanel({
                               )}
                             </div>
                             <p className="comment-text">{c.text}</p>
-                            {r._id && (
+                            {r._id && allowComments !== false && (
                               <button
                                 type="button"
                                 className="link-btn comment-reply-btn"
@@ -491,7 +503,11 @@ export function SpotDetailPanel({
             ));
           })()}
         </div>
-        <input type="file" accept="image/*" onChange={handlePhoto} />
+        {allowPhotos === false ? (
+          <p className="italic muted">Photo uploads are disabled for this map.</p>
+        ) : (
+          <input type="file" accept="image/*" onChange={handlePhoto} />
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { JsonLd } from "@/components/JsonLd";
 import type { HomeMapCardData } from "@/components/MapCard";
 import { serverClient } from "@/sanity/lib/client";
 import { PUBLIC_MAPS_QUERY } from "@/sanity/lib/queries";
+import { coverImageUrl } from "@/sanity/lib/images";
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import type { MapDocument, Spot } from "@/lib/types";
 import {
@@ -94,6 +95,7 @@ async function fetchLiveMaps(): Promise<HomeMapCardData[]> {
       ownerName: m.ownerName || "Community",
       spotCount: counts[m._id] ?? 0,
       accent: m.accentColor ?? undefined,
+      coverUrl: coverImageUrl(m.coverImage),
     }));
   } catch {
     // If Sanity or Mongo are unavailable, fall back to the demo cards only.

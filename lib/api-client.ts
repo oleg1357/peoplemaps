@@ -300,6 +300,13 @@ export interface CreateMapInput {
   submissionNote?: string;
   maxPhotosPerSpot?: number;
   requireApproval?: boolean;
+  contactEmail?: string;
+  website?: string;
+  allowReviews?: boolean;
+  allowComments?: boolean;
+  allowPhotos?: boolean;
+  collaborationMode?: "anyone" | "loggedIn" | "invitedOnly";
+  enableClustering?: boolean;
 }
 
 export async function createMap(input: CreateMapInput): Promise<{ _id: string; title: string; slug: string | null }> {
@@ -319,6 +326,25 @@ export async function updateMapSettings(mapId: string, input: MapSettingsInput):
     body: JSON.stringify({ mapId, ...input }),
   });
   return res.map;
+}
+
+export async function uploadCoverImage(
+  mapId: string,
+  file: Blob,
+): Promise<{ ok: boolean; assetId: string; url: string } | null> {
+  if (!backendLive) return null;
+  return req<{ ok: boolean; assetId: string; url: string }>(
+    `/api/admin/maps/cover?mapId=${encodeURIComponent(mapId)}`,
+    { method: "POST", body: file, headers: { "Content-Type": file.type } }
+  );
+}
+
+export async function removeCoverImage(mapId: string): Promise<{ ok: boolean } | null> {
+  if (!backendLive) return null;
+  return req<{ ok: boolean }>(
+    `/api/admin/maps/cover?mapId=${encodeURIComponent(mapId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function destroyMap(mapId: string): Promise<void> {

@@ -983,6 +983,25 @@
   border: 1px solid var(--error-border);
 }
 
+.map-submit-msg {
+  position: absolute;
+  z-index: 9998;
+  bottom: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  color: var(--green-dark);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--green);
+  padding: 10px 16px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  animation: hint-in 0.25s ease;
+}
+
 /* ---------- Add-spot flow ---------- */
 #add-hint {
   position: absolute;

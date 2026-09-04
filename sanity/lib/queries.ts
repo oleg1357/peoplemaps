@@ -7,7 +7,15 @@ export const MAP_FIELDS = `,
   welcomeMessage,
   submissionNote,
   maxPhotosPerSpot,
-  requireApproval`;
+  requireApproval,
+  coverImage,
+  contactEmail,
+  website,
+  allowReviews,
+  allowComments,
+  allowPhotos,
+  collaborationMode,
+  enableClustering`;
 
 export const MAP_BY_ID_QUERY = defineQuery(`
   *[_id == $id][0]{

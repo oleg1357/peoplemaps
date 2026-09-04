@@ -1,5 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, publicContentFilter } from "@/lib/api";
+import { getMap } from "@/lib/admin";
 import type { Spot, Review, ReviewComment, SpotPhoto, Zone, Route } from "@/lib/types";
 
 // GET /api/map-data?mapId=<id>
@@ -11,6 +12,10 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   return withDb(async (db) => {
+    // Resolve the map's maxPhotosPerSpot setting for the photo slice limit.
+    const mapDoc = await getMap(mapId);
+    const maxPhotos = mapDoc?.maxPhotosPerSpot ?? 6;
+
     // Public map only shows spots that have been approved (or predate moderation)
     // and are not hidden. Pending and rejected spots are hidden from public views.
     const spots = await db
@@ -65,7 +70,7 @@ export async function GET(req: Request) {
             { $match: { spotId: { $in: spotIds } } },
             { $sort: { date: -1 } },
             { $group: { _id: "$spotId", docs: { $push: "$$ROOT" } } },
-            { $project: { docs: { $slice: ["$docs", 6] } } },
+            { $project: { docs: { $slice: ["$docs", maxPhotos] } } },
             { $unwind: "$docs" },
             { $replaceRoot: { newRoot: "$docs" } },
             { $project: { dataUrl: 0 } },

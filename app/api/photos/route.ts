@@ -1,6 +1,7 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, getOptionalContext } from "@/lib/api";
-import type { SpotPhoto } from "@/lib/types";
+import { getMap } from "@/lib/admin";
+import type { SpotPhoto, Spot } from "@/lib/types";
 
 // GET /api/photos?spotId=<id>
 // POST /api/photos -> upload photo (dataUrl)
@@ -45,13 +46,21 @@ export async function POST(req: Request) {
   };
   return withDb(async (db) => {
     const col = db.collection<SpotPhoto>(COLLECTIONS.photos);
+    const spot = await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: spotId as never } as never);
+    const map = spot?.mapId ? await getMap(spot.mapId) : null;
+    // Respect the map's allowPhotos toggle.
+    if (map && map.allowPhotos === false) {
+      return error("Photo uploads are disabled for this map.", 403);
+    }
+    // Resolve the map's maxPhotosPerSpot setting instead of using a hardcoded limit.
+    const maxPhotos = map?.maxPhotosPerSpot ?? 6;
     const existing = await col.countDocuments({ spotId });
-    if (existing >= 6) {
-      // keep only the 6 most recent
+    if (existing >= maxPhotos && maxPhotos > 0) {
+      // keep only the most recent photos up to the limit
       const oldest = await col
         .find({ spotId })
         .sort({ date: 1 })
-        .limit(existing - 5)
+        .limit(existing - (maxPhotos - 1))
         .toArray();
       if (oldest.length) {
         await col.deleteMany({ _id: { $in: oldest.map((p) => p._id) } });

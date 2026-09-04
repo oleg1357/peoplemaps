@@ -54,7 +54,15 @@ const MAP_PROJECTION = `{
   welcomeMessage,
   submissionNote,
   maxPhotosPerSpot,
-  requireApproval
+  requireApproval,
+  coverImage,
+  contactEmail,
+  website,
+  allowReviews,
+  allowComments,
+  allowPhotos,
+  collaborationMode,
+  enableClustering,
 }`;
 
 // Fetches a map document from Sanity. Returns null if the map doesn't exist.

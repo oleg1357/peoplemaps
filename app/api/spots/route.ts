@@ -55,23 +55,42 @@ export async function POST(req: Request) {
     return error("Spot requires name, lat and lng");
   }
 
-  // Spot submissions require a signed-in user. Identity comes from the session
-  // cookie (never from the request body), and moderation is decided server-side.
+  // Spot submissions require a signed-in user (unless the map is in "anyone"
+  // mode). Identity comes from the session cookie (never from the request body),
+  // and moderation is decided server-side.
   const ctx = await getAdminContext(req);
-  if (!ctx.userId) {
-    return error("You must be signed in to add a spot.", 401);
-  }
   const userId = ctx.userId;
 
-  let moderation: Spot["moderation"] = "pending";
   const map = await getMap(mapId);
+
+  // collaborationMode decides who can add spots to this map.
+  const mode = map?.collaborationMode ?? "loggedIn";
+  if (mode !== "anyone") {
+    if (!ctx.userId) {
+      return error("You must be signed in to add a spot.", 401);
+    }
+  }
+  if (mode === "invitedOnly" && ctx.userId) {
+    const allowed =
+      isGlobalAdmin(ctx.userId) ||
+      (map?.ownerId && map.ownerId === ctx.userId) ||
+      (await isMapModerator(mapId, ctx.userId));
+    if (!allowed) {
+      return error(
+        "Only the map owner and moderators can add spots to this map.",
+        403
+      );
+    }
+  }
+
+  let moderation: Spot["moderation"] = "pending";
   // The map owner, global admins and designated moderators are always trusted; a
   // map can also disable approval entirely so everyone's spots go live
   // immediately.
   if (
-    isGlobalAdmin(ctx.userId) ||
-    (map?.ownerId && map.ownerId === ctx.userId) ||
-    (await isMapModerator(mapId, ctx.userId))
+    (ctx.userId && isGlobalAdmin(ctx.userId)) ||
+    (map?.ownerId && ctx.userId && map.ownerId === ctx.userId) ||
+    (ctx.userId && (await isMapModerator(mapId, ctx.userId)))
   ) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
@@ -98,7 +117,7 @@ export async function POST(req: Request) {
     marker: marker ?? undefined,
   };
   return withDb(async (db) => {
-    if (await isBanned(db, mapId, userId)) {
+    if (userId && (await isBanned(db, mapId, userId))) {
       return error("You are banned from contributing to this map.", 403);
     }
     const col = db.collection<Spot>(COLLECTIONS.spots);

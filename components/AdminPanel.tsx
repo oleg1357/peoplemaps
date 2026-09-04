@@ -481,6 +481,12 @@ export function AdminPanel() {
       requireApproval: activeMap.requireApproval ?? true,
       baseCenter: activeMap.baseCenter ?? DEFAULT_BASE,
       baseZoom: activeMap.baseZoom ?? 12,
+      contactEmail: activeMap.contactEmail ?? "",
+      website: activeMap.website ?? "",
+      allowReviews: activeMap.allowReviews ?? true,
+      allowComments: activeMap.allowComments ?? true,
+      allowPhotos: activeMap.allowPhotos ?? true,
+      collaborationMode: activeMap.collaborationMode ?? "loggedIn",
     });
   }, [activeMap?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1008,6 +1014,7 @@ export function AdminPanel() {
                     settingsError={settingsError}
                     onSubmit={handleSaveSettings}
                     onDeleteMap={() => setConfirmDeleteMap(true)}
+                    activeMap={activeMap}
                   />
                 )}
               </>

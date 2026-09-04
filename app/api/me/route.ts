@@ -3,6 +3,7 @@ import { COLLECTIONS, getDb } from "@/lib/mongodb";
 import { json, toObjectId } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import { serverClient } from "@/sanity/lib/client";
+import { coverImageUrl } from "@/sanity/lib/images";
 import { getServerSupabase } from "@/lib/supabase-server";
 import type { Filter } from "mongodb";
 import type {
@@ -24,8 +25,10 @@ interface MapMeta {
   _id: string;
   title: string;
   slug: string | null;
+  description?: string;
   accentColor: string | null;
   ownerId?: string;
+  coverImage?: { asset?: { _ref?: string } } | null;
 }
 
 function initialsOf(first: string, last: string, email: string | null): string {
@@ -81,7 +84,7 @@ export async function GET(req: Request) {
   if (serverClient) {
     try {
       maps = await serverClient.fetch<MapMeta[]>(
-        `*[_type == "map"]{ _id, title, "slug": slug.current, accentColor, ownerId }`
+        `*[_type == "map"]{ _id, title, "slug": slug.current, description, accentColor, ownerId, coverImage }`
       );
     } catch {
       maps = [];
@@ -103,7 +106,7 @@ export async function GET(req: Request) {
     const fallback: ProfileData = {
       user: { ...user, memberSince: null },
       stats: { spots: 0, reviews: 0, comments: 0, photos: 0, votes: 0, helpfulReceived: 0, mapsOwned: ownedMaps.length },
-      maps: ownedMaps.map((m) => ({ _id: m._id, title: m.title, slug: m.slug, accentColor: m.accentColor, spotCount: 0 })),
+      maps: ownedMaps.map((m) => ({ _id: m._id, title: m.title, slug: m.slug, description: m.description ?? "", accentColor: m.accentColor, spotCount: 0, coverUrl: coverImageUrl(m.coverImage) })),
       contributions: { spots: [], reviews: [], comments: [], photos: [] },
     };
     return json(fallback);
@@ -276,8 +279,10 @@ export async function GET(req: Request) {
         _id: m._id,
         title: m.title,
         slug: m.slug,
+        description: m.description ?? "",
         accentColor: m.accentColor,
         spotCount: countsByMap.get(m._id) ?? 0,
+        coverUrl: coverImageUrl(m.coverImage),
       })),
       contributions: { spots, reviews, comments, photos },
     };

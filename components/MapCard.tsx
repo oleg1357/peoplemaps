@@ -11,6 +11,7 @@ export interface HomeMapCardData {
   ownerName: string;
   spotCount: number;
   accent?: string;
+  coverUrl?: string | null;
 }
 
 export function MapCard({
@@ -28,9 +29,13 @@ export function MapCard({
     <Link href={href} className="home-map-card">
       <div
         className="home-map-card-accent"
-        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}
+        style={map.coverUrl ? undefined : { background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}
       >
-        <IconMapMarker size={34} color="#ffffff" />
+        {map.coverUrl ? (
+          <img src={map.coverUrl} alt={map.title} className="home-map-card-cover" />
+        ) : (
+          <IconMapMarker size={34} color="#ffffff" />
+        )}
       </div>
       <div className="home-map-card-body">
         <h3>{map.title}</h3>

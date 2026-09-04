@@ -165,8 +165,14 @@ export default function ProfilePage() {
                         className="profile-map-card"
                         style={{ borderTop: `4px solid ${accent}` }}
                       >
+                        {m.coverUrl && (
+                          <img src={m.coverUrl} alt={m.title} className="profile-map-card-cover" />
+                        )}
                         <div className="profile-map-card-body">
                           <h3>{m.title}</h3>
+                          {m.description && (
+                            <p className="profile-map-card-desc muted">{m.description}</p>
+                          )}
                           <p className="muted">
                             <IconMapMarker size={13} /> {m.spotCount} spot
                             {m.spotCount === 1 ? "" : "s"}

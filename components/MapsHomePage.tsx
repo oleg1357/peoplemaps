@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap, Polygon, Polyline, Circle, CircleMarker } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-markercluster";
 import L from "leaflet";
 import { useTheme } from "@/lib/ThemeContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -111,10 +112,12 @@ export function MapsHomePage({
   const { maps, activeMap, selectMap, spots, spotsLoading, addSpot, mapData, patchMapData, zones, routes, addZone, addRoute } =
     useMapData();
   const router = useRouter();
+  const baseCenter = activeMap?.baseCenter;
+  const baseZoom = activeMap?.baseZoom;
   const [mapCenter, setMapCenter] = useState<[number, number]>(
-    initialCenter ?? CENTER
+    initialCenter ?? (baseCenter ? [baseCenter.lat, baseCenter.lng] : CENTER)
   );
-  const [mapZoom, setMapZoom] = useState(initialZoom ?? ZOOM);
+  const [mapZoom, setMapZoom] = useState(initialZoom ?? (baseZoom ?? ZOOM));
   const onMapMove = useCallback((c: [number, number], z: number) => {
     setMapCenter(c);
     setMapZoom(z);
@@ -150,6 +153,7 @@ export function MapsHomePage({
   const [newMarker, setNewMarker] = useState<string | null>(null);
   const [newMarkerColor, setNewMarkerColor] = useState<string | null>(null);
   const [addError, setAddError] = useState("");
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   // Zone/route drawing state.
   const [drawMode, setDrawMode] = useState<"zone" | "route" | null>(null);
   const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
@@ -177,7 +181,14 @@ export function MapsHomePage({
     setDrawError("");
     setAdding(false);
     setDraft(null);
-  }, [activeMap?._id]);
+    // Fly to the map's configured base center/zoom when switching maps.
+    if (baseCenter) {
+      viewTargetRef.current = {
+        center: [baseCenter.lat, baseCenter.lng],
+        zoom: baseZoom ?? ZOOM,
+      };
+    }
+  }, [activeMap?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickMarkerEmoji =
     newMarker ?? activeMap?.defaultMarker ?? DEFAULT_MARKER.emoji;
@@ -531,11 +542,11 @@ export function MapsHomePage({
   const handleAddSpot = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setAddError("");
-    if (!userId) {
+    if (!activeMap || !draft || !newName.trim()) return;
+    if (!userId && activeMap.collaborationMode !== "anyone") {
       setAddError("You must be signed in to add a spot.");
       return;
     }
-    if (!activeMap || !draft || !newName.trim()) return;
     try {
       const spot = await addSpot({
         mapId: activeMap._id,
@@ -556,6 +567,10 @@ export function MapsHomePage({
         // The create response already carries the full spot, so the details
         // popup opens immediately with its data — no extra request.
         openSpot(spot);
+        if (activeMap.requireApproval !== false) {
+          setSubmitMsg("Your spot has been submitted and is pending review.");
+          setTimeout(() => setSubmitMsg(null), 5000);
+        }
       }
     } catch (err) {
       setAddError(
@@ -739,6 +754,9 @@ export function MapsHomePage({
           status={status}
           onStatus={handleStatus}
           userId={userId}
+          allowReviews={activeMap?.allowReviews ?? true}
+          allowComments={activeMap?.allowComments ?? true}
+          allowPhotos={activeMap?.allowPhotos ?? true}
           editingSpot={editingSpot}
           setEditingSpot={setEditingSpot}
           startEditSpot={startEditSpot}
@@ -858,30 +876,59 @@ export function MapsHomePage({
             </Polyline>
           ) : null
         )}
-        {visibleSpots.map((s) => {
-          const base = resolveMarker(s.marker);
-          return (
-            <Marker
-              key={s._id}
-              position={[s.lat, s.lng]}
-              icon={spotIconFor(
-                base.emoji,
-                s.markerColor ?? base.color ?? activeMap?.defaultMarkerColor ?? DEFAULT_MARKER.color
-              )}
-              eventHandlers={{ click: () => openSpot(s) }}
-            >
-              <Tooltip direction="top" offset={[0, -12]}>
-                <SpotTooltip
-                  name={s.name}
-                  street={s.street}
-                  city={s.city}
-                  status={s.status}
-                  hint="Click to view details"
-                />
-              </Tooltip>
-            </Marker>
-          );
-        })}
+        {activeMap?.enableClustering ? (
+          <MarkerClusterGroup>
+            {visibleSpots.map((s) => {
+              const base = resolveMarker(s.marker);
+              return (
+                <Marker
+                  key={s._id}
+                  position={[s.lat, s.lng]}
+                  icon={spotIconFor(
+                    base.emoji,
+                    s.markerColor ?? base.color ?? activeMap?.defaultMarkerColor ?? DEFAULT_MARKER.color
+                  )}
+                  eventHandlers={{ click: () => openSpot(s) }}
+                >
+                  <Tooltip direction="top" offset={[0, -12]}>
+                    <SpotTooltip
+                      name={s.name}
+                      street={s.street}
+                      city={s.city}
+                      status={s.status}
+                      hint="Click to view details"
+                    />
+                  </Tooltip>
+                </Marker>
+              );
+            })}
+          </MarkerClusterGroup>
+        ) : (
+          visibleSpots.map((s) => {
+            const base = resolveMarker(s.marker);
+            return (
+              <Marker
+                key={s._id}
+                position={[s.lat, s.lng]}
+                icon={spotIconFor(
+                  base.emoji,
+                  s.markerColor ?? base.color ?? activeMap?.defaultMarkerColor ?? DEFAULT_MARKER.color
+                )}
+                eventHandlers={{ click: () => openSpot(s) }}
+              >
+                <Tooltip direction="top" offset={[0, -12]}>
+                  <SpotTooltip
+                    name={s.name}
+                    street={s.street}
+                    city={s.city}
+                    status={s.status}
+                    hint="Click to view details"
+                  />
+                </Tooltip>
+              </Marker>
+            );
+          })
+        )}
         {draft && (
           <Marker
             position={draft}
@@ -949,6 +996,12 @@ export function MapsHomePage({
           activeMap={activeMap}
           onSubmit={handleAddSpot}
         />
+      )}
+
+      {submitMsg && (
+        <div className="map-submit-msg" style={{ borderColor: activeMap?.accentColor ?? DEFAULT_MARKER.color }}>
+          {submitMsg}
+        </div>
       )}
 
       {drawMode && (

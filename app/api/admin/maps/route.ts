@@ -161,6 +161,15 @@ export async function POST(req: Request) {
       ? Math.max(0, Math.min(12, Number(body.maxPhotosPerSpot)))
       : 6;
   const requireApproval = body.requireApproval === false ? false : true;
+  const allowReviews = body.allowReviews === false ? false : true;
+  const allowComments = body.allowComments === false ? false : true;
+  const allowPhotos = body.allowPhotos === false ? false : true;
+  const collaborationMode = ["anyone", "loggedIn", "invitedOnly"].includes(
+    String(body.collaborationMode)
+  )
+    ? String(body.collaborationMode)
+    : "loggedIn";
+  const enableClustering = body.enableClustering === true;
 
   try {
     const doc = await writeClient.create({
@@ -183,6 +192,13 @@ export async function POST(req: Request) {
       submissionNote: String(body.submissionNote ?? ""),
       maxPhotosPerSpot: maxPhotos,
       requireApproval,
+      contactEmail: String(body.contactEmail ?? ""),
+      website: String(body.website ?? ""),
+      allowReviews,
+      allowComments,
+      allowPhotos,
+      collaborationMode,
+      enableClustering,
     });
     return json(
       { _id: doc._id, title: doc.title, slug: doc.slug?.current ?? null },
@@ -256,6 +272,39 @@ export async function PATCH(req: Request) {
   }
   if (input.requireApproval !== undefined) {
     patch.requireApproval = input.requireApproval === false ? false : true;
+  }
+  if (input.contactEmail !== undefined) {
+    const email = String(input.contactEmail ?? "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json({ error: "Invalid contact email." }, { status: 400 });
+    }
+    patch.contactEmail = email;
+  }
+  if (input.website !== undefined) {
+    const url = String(input.website ?? "").trim();
+    if (url && !/^https?:\/\/.+/i.test(url)) {
+      return json({ error: "Website must be a valid http(s) URL." }, { status: 400 });
+    }
+    patch.website = url;
+  }
+  if (input.allowReviews !== undefined) {
+    patch.allowReviews = input.allowReviews === false ? false : true;
+  }
+  if (input.allowComments !== undefined) {
+    patch.allowComments = input.allowComments === false ? false : true;
+  }
+  if (input.allowPhotos !== undefined) {
+    patch.allowPhotos = input.allowPhotos === false ? false : true;
+  }
+  if (input.collaborationMode !== undefined) {
+    if (["anyone", "loggedIn", "invitedOnly"].includes(String(input.collaborationMode))) {
+      patch.collaborationMode = String(input.collaborationMode);
+    } else {
+      return json({ error: "Invalid collaboration mode." }, { status: 400 });
+    }
+  }
+  if (input.enableClustering !== undefined) {
+    patch.enableClustering = input.enableClustering === true;
   }
   if (input.baseCenter !== undefined) {
     const c = input.baseCenter as { lat?: number; lng?: number };

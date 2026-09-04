@@ -127,6 +127,73 @@ export const map = defineType({
       type: "boolean",
       initialValue: true,
     }),
+    defineField({
+      name: "coverImage",
+      title: "Cover image",
+      description:
+        "Shown as the card thumbnail on the homepage and profile page.",
+      type: "image",
+      options: { hotspot: true },
+    }),
+    defineField({
+      name: "contactEmail",
+      title: "Contact email",
+      description: "Public contact email for this map.",
+      type: "string",
+      validation: (rule) =>
+        rule.custom((v: string | undefined) => {
+          if (!v) return true;
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : "Invalid email";
+        }),
+    }),
+    defineField({
+      name: "website",
+      title: "Website",
+      description: "External link (personal site, social, etc.).",
+      type: "url",
+    }),
+    defineField({
+      name: "allowReviews",
+      title: "Allow reviews",
+      description: "When off, visitors cannot add reviews to spots.",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "allowComments",
+      title: "Allow comments",
+      description: "When off, visitors cannot comment on reviews.",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "allowPhotos",
+      title: "Allow photos",
+      description: "When off, visitors cannot upload photos to spots.",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "collaborationMode",
+      title: "Who can add spots",
+      type: "string",
+      options: {
+        list: [
+          { title: "Anyone (no login required)", value: "anyone" },
+          { title: "Logged-in users", value: "loggedIn" },
+          { title: "Owner & moderators only", value: "invitedOnly" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "loggedIn",
+    }),
+    defineField({
+      name: "enableClustering",
+      title: "Cluster markers on the map",
+      description: "When on, nearby markers are grouped into colored clusters.",
+      type: "boolean",
+      initialValue: false,
+    }),
   ],
   preview: {
     select: {

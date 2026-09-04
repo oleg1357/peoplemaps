@@ -1,7 +1,8 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, getOptionalContext } from "@/lib/api";
+import { getMap } from "@/lib/admin";
 import type { Filter } from "mongodb";
-import type { ReviewComment } from "@/lib/types";
+import type { ReviewComment, Review, Spot } from "@/lib/types";
 
 const MAX_COMMENT_LENGTH = 1000;
 
@@ -41,6 +42,15 @@ export async function POST(req: Request) {
     parentId: typeof body.parentId === "string" && body.parentId ? body.parentId : null,
   };
   return withDb(async (db) => {
+    // Respect the map's allowComments toggle.
+    const review = await db.collection<Review>(COLLECTIONS.reviews).findOne({ _id: comment.reviewId as never } as never);
+    const spot = review?.spotId
+      ? await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: review.spotId as never } as never)
+      : null;
+    const map = spot?.mapId ? await getMap(spot.mapId) : null;
+    if (map && map.allowComments === false) {
+      return error("Comments are disabled for this map.", 403);
+    }
     const col = db.collection<ReviewComment>(COLLECTIONS.comments);
     // The parent must exist and belong to the same review.
     if (comment.parentId) {

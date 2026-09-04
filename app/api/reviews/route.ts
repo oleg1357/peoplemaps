@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter, getOptionalContext } from "@/lib/api";
-import type { Review } from "@/lib/types";
+import { getMap } from "@/lib/admin";
+import type { Review, Spot } from "@/lib/types";
 
 const MIN_SCORE = 0;
 const MAX_SCORE = 5;
@@ -37,6 +38,12 @@ export async function POST(req: Request) {
     user_fk: ctx.userId ?? body.user_fk ?? null,
   };
   return withDb(async (db) => {
+    // Respect the map's allowReviews toggle.
+    const spot = await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: body.spotId as never } as never);
+    const map = spot?.mapId ? await getMap(spot.mapId) : null;
+    if (map && map.allowReviews === false) {
+      return error("Reviews are disabled for this map.", 403);
+    }
     const col = db.collection<Review>(COLLECTIONS.reviews);
     const result = await col.insertOne(review);
     return json({ ...review, _id: result.insertedId }, { status: 201 });
