@@ -1935,6 +1935,118 @@
   background: var(--surface-1);
 }
 
+/* ---------- Tag & rating filter bar ---------- */
+.map-filter-bar {
+  position: absolute;
+  z-index: 9998;
+  top: 250px;
+  left: 16px;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.map-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px 10px;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.map-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.map-filter-chip {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.map-filter-chip:hover {
+  border-color: var(--green);
+}
+
+.map-filter-chip.active {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(97, 198, 122, 0.12);
+}
+
+.map-filter-clear {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.map-filter-clear:hover {
+  color: var(--danger);
+}
+
+.map-filter-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+}
+
+.map-rating-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px 10px;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.map-star-btn {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.map-star-btn:hover {
+  border-color: var(--green);
+}
+
+.map-star-btn.active {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(97, 198, 122, 0.12);
+}
+
 /* ---------- Category chip ---------- */
 .category-chip {
   display: inline-block;

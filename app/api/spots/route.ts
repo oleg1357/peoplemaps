@@ -3,6 +3,7 @@ import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter, publicContentFilter } from "@/lib/api";
 import { getAdminContext, getMap, isGlobalAdmin, canModerateMap, isMapModerator } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
+import { applyAutoModeration } from "@/lib/moderation-rules";
 import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
 import type { Spot, MapBan } from "@/lib/types";
 import type { Filter, Db } from "mongodb";
@@ -114,6 +115,19 @@ export async function POST(req: Request) {
         .slice(0, 8)
     : [];
   const tip = String(body.tip ?? "").slice(0, 280) || null;
+
+  // Auto-moderation rules can still override a pending submission (approve or
+  // reject on match). Trusted authors and maps with approval disabled keep the
+  // "approved" status decided above — rules never downgrade them.
+  if (moderation === "pending") {
+    const auto = await applyAutoModeration(mapId, {
+      name: String(body.name),
+      tip,
+      tags,
+      hoursNote,
+    });
+    if (auto) moderation = auto;
+  }
 
   const spot: Spot = {
     mapId,

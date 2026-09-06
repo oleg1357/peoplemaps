@@ -178,6 +178,12 @@ export function MapsHomePage({
   const [showSpots, setShowSpots] = useState(true);
   const [showZones, setShowZones] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
+  // Tag & rating filters (public map). Tag filter selects spots carrying a tag;
+  // rating filter shows only spots meeting a minimum average review score.
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [minRating, setMinRating] = useState(0);
+  // Search jump: when a query has matches, fly to the first/last-selected result.
+  const [searchFlyId, setSearchFlyId] = useState<string | null>(null);
   const flyTargetRef = useRef<[number, number] | null>(null);
 
   // Reset drawing whenever the active map changes.
@@ -222,24 +228,8 @@ export function MapsHomePage({
     activeMap?.defaultMarkerColor ??
     DEFAULT_MARKER.color;
 
-  // Search/filter derived views. A spot matches when the query is a
-  // case-insensitive substring of its name, city, street or tags.
-  const q = searchQuery.trim().toLowerCase();
-  const searchableSpots = q
-    ? spots.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.city?.toLowerCase().includes(q) ||
-          s.street?.toLowerCase().includes(q) ||
-          (s.tags ?? []).some((t) => t.toLowerCase().includes(q))
-      )
-    : spots;
-  const visibleSpots = showSpots ? searchableSpots : [];
-  const visibleZones = showZones ? zones : [];
-  const visibleRoutes = showRoutes ? routes : [];
-
-  // Average rating per spot, so map tooltips can show the community score
-  // without an extra fetch per marker.
+  // Average rating per spot, so map tooltips and the rating filter can use the
+  // community score without an extra fetch per marker.
   const avgBySpot = useMemo(() => {
     const sums = new Map<string, { total: number; count: number }>();
     for (const r of mapData.reviews) {
@@ -255,6 +245,67 @@ export function MapsHomePage({
     }
     return out;
   }, [mapData.reviews]);
+
+  // Search/filter derived views. A spot matches when the query is a
+  // case-insensitive substring of its name, city, street or tags.
+  const q = searchQuery.trim().toLowerCase();
+  const searchableSpots = q
+    ? spots.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.city?.toLowerCase().includes(q) ||
+          s.street?.toLowerCase().includes(q) ||
+          (s.tags ?? []).some((t) => t.toLowerCase().includes(q))
+      )
+    : spots;
+
+  // Tag & rating filters apply on top of the search. A spot must carry the
+  // selected tag (if any) and, when a minimum rating is set, have reviews
+  // averaging at least that score and at least one score.
+  const tagFiltered = tagFilter
+    ? searchableSpots.filter((s) => (s.tags ?? []).includes(tagFilter))
+    : searchableSpots;
+  const ratingFiltered =
+    minRating > 0
+      ? tagFiltered.filter((s) => {
+          const avg = avgBySpot.get(s._id ?? "");
+          return avg !== undefined && avg >= minRating;
+        })
+      : tagFiltered;
+  const visibleSpots = showSpots ? ratingFiltered : [];
+  const visibleZones = showZones ? zones : [];
+  const visibleRoutes = showRoutes ? routes : [];
+
+  // The most common tags on this map, capped so the chip row stays compact.
+  const topTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of spots) {
+      for (const t of s.tags ?? []) {
+        const key = t.trim().toLowerCase();
+        if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 12)
+      .map(([tag]) => tag);
+  }, [spots]);
+
+  // When the user types a search, fly to the best match and remember its id so
+  // When the user types a search, fly to the best match and remember its id so
+  // a repeated/edited query re-centers without double-flying on every render.
+  const searchBest = q && searchableSpots.length > 0 ? searchableSpots[0] : null;
+  const searchBestId = searchBest?._id ?? null;
+  const searchBestPos: [number, number] | null = searchBest
+    ? [searchBest.lat, searchBest.lng]
+    : null;
+  useEffect(() => {
+    if (!searchBestId || searchBestId === searchFlyId) return;
+    setSearchFlyId(searchBestId);
+    if (searchBestPos) flyTargetRef.current = searchBestPos;
+    setSelected(searchBest!);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchBestId, searchBestPos, searchFlyId]);
 
   const loadBundle = (spot: Spot, data: MapData): SpotDetailBundle => {
     const reviews = data.reviews
@@ -663,16 +714,17 @@ export function MapsHomePage({
 // (`/map/<slug>`) and falls back to the document id for maps without one.
   const buildPermalink = (map: { _id: string; slug?: string | null } | null, includeView: boolean) => {
     const origin = window.location.origin;
-    const base = map
-      ? map.slug
-        ? `${origin}/map/${encodeURIComponent(map.slug)}`
-        : `${origin}/map?map=${encodeURIComponent(map._id)}`
-      : `${origin}/map`;
-    return includeView
-      ? `${base}?lat=${mapCenter[0].toFixed(5)}&lng=${mapCenter[1].toFixed(
+    const slugBase = map?.slug
+      ? `${origin}/map/${encodeURIComponent(map.slug)}`
+      : null;
+    const idBase = map ? `${origin}/map?map=${encodeURIComponent(map._id)}` : null;
+    const base = slugBase ?? idBase ?? `${origin}/map`;
+    const view = includeView
+      ? `${(slugBase ? "?" : "&")}lat=${mapCenter[0].toFixed(5)}&lng=${mapCenter[1].toFixed(
           5
         )}&zoom=${mapZoom}`
-      : base;
+      : "";
+    return base + view;
   };
 
   const copyViewLink = async () => {
@@ -824,6 +876,50 @@ export function MapsHomePage({
         onCopyView={copyViewLink}
         viewCopied={viewCopied}
       />
+
+      {(topTags.length > 0 || minRating > 0 || tagFilter) && (
+        <div className="map-filter-bar">
+          {topTags.length > 0 && (
+            <div className="map-filter-chips">
+              <span className="map-filter-label">Tags</span>
+              {topTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`map-filter-chip ${tagFilter === tag ? "active" : ""}`}
+                  onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                >
+                  #{tag}
+                </button>
+              ))}
+              {tagFilter && (
+                <button
+                  type="button"
+                  className="map-filter-clear"
+                  onClick={() => setTagFilter(null)}
+                >
+                  Clear tags
+                </button>
+              )}
+            </div>
+          )}
+          {topTags.length > 0 && <span className="map-filter-divider" />}
+          <div className="map-rating-filter">
+            <span className="map-filter-label">Min rating</span>
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`map-star-btn ${minRating === n ? "active" : ""}`}
+                onClick={() => setMinRating(n)}
+                title={n === 0 ? "Show all spots" : `Only spots rated ${n}★ or higher`}
+              >
+                {n === 0 ? "All" : `${n}★+`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {selected && bundle && (
         <SpotDetailPanel

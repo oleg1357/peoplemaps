@@ -58,6 +58,7 @@ export const COLLECTIONS = {
   activityLog: "activity_log",
   reports: "reports",
   bans: "bans",
+  mapRules: "map_rules",
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

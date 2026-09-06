@@ -16,6 +16,7 @@ import {
 import { IconTrash } from "../icons";
 import { MarkerPicker, AdminField } from "../AdminPanel";
 import { coverImageUrl } from "@/sanity/lib/images";
+import AutoModerationSection from "./AutoModerationSection";
 import type { MapDocument } from "@/lib/types";
 
 const DEFAULT_BASE = { lat: 55.6761, lng: 12.5683 };
@@ -72,6 +73,7 @@ export default function AdminSettingsView({
   };
 
   return (
+    <>
     <form className="admin-section" onSubmit={onSubmit}>
       <h3>Map settings</h3>
       <div className="admin-panel-group">
@@ -379,5 +381,12 @@ export default function AdminSettingsView({
         </button>
       </div>
     </form>
+
+    {backendLive && activeMap && (
+      <div className="admin-section">
+        <AutoModerationSection mapId={activeMap._id} backendLive={backendLive} />
+      </div>
+    )}
+    </>
   );
 }

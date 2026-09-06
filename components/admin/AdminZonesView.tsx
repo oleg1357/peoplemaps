@@ -1,6 +1,7 @@
 "use client";
 
 import type { AdminZoneList, AdminRouteList } from "@/lib/api-client";
+import { backendLive } from "@/lib/api-client";
 import type { Zone, Route } from "@/lib/types";
 import { ZoneAdminRow, RouteAdminRow } from "../AdminPanel";
 
@@ -26,6 +27,10 @@ export default function AdminZonesView({
   onRejectRoute,
   onToggleRouteHidden,
   onDestroyRoute,
+  onApproveAllPendingZones,
+  onRejectAllPendingZones,
+  onApproveAllPendingRoutes,
+  onRejectAllPendingRoutes,
 }: {
   zoneData: AdminZoneList | null;
   routeData: AdminRouteList | null;
@@ -48,6 +53,10 @@ export default function AdminZonesView({
   onRejectRoute: (r: Route) => void;
   onToggleRouteHidden: (r: Route) => void;
   onDestroyRoute: (r: Route) => void;
+  onApproveAllPendingZones: () => void;
+  onRejectAllPendingZones: () => void;
+  onApproveAllPendingRoutes: () => void;
+  onRejectAllPendingRoutes: () => void;
 }) {
   return (
     <div className="admin-section">
@@ -90,6 +99,20 @@ export default function AdminZonesView({
       ) : (
         <>
           <h4 className="admin-subheading">Zones</h4>
+          {backendLive && zoneData && (zoneData.pending > 0 || zoneData.zones.length > 0) && (
+            <div className="admin-moderation-row" style={{ margin: "8px 0 12px" }}>
+              {zoneData.pending > 0 && (
+                <>
+                  <button type="button" className="action-btn" onClick={onApproveAllPendingZones}>
+                    Approve all {zoneData.pending} pending zones
+                  </button>
+                  <button type="button" className="action-btn reject" onClick={onRejectAllPendingZones}>
+                    Reject all pending zones
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {zoneData && zoneData.zones.length === 0 ? (
             <p className="empty-state">No zones on this map yet.</p>
           ) : (
@@ -119,6 +142,20 @@ export default function AdminZonesView({
           )}
 
           <h4 className="admin-subheading">Routes</h4>
+          {backendLive && routeData && (routeData.pending > 0 || routeData.routes.length > 0) && (
+            <div className="admin-moderation-row" style={{ margin: "8px 0 12px" }}>
+              {routeData.pending > 0 && (
+                <>
+                  <button type="button" className="action-btn" onClick={onApproveAllPendingRoutes}>
+                    Approve all {routeData.pending} pending routes
+                  </button>
+                  <button type="button" className="action-btn reject" onClick={onRejectAllPendingRoutes}>
+                    Reject all pending routes
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {routeData && routeData.routes.length === 0 ? (
             <p className="empty-state">No routes on this map yet.</p>
           ) : (

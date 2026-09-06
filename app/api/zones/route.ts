@@ -2,6 +2,7 @@ import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, isValidLatLng, publicContentFilter } from "@/lib/api";
 import { getAdminContext, getMap, isGlobalAdmin, isMapModerator } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
+import { applyAutoModeration } from "@/lib/moderation-rules";
 import { hasValidColor } from "@/lib/markers-data";
 import type { Filter, Db } from "mongodb";
 import type { Zone, MapBan } from "@/lib/types";
@@ -116,6 +117,12 @@ export async function POST(req: Request) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
     moderation = "approved";
+  }
+
+  // Auto-moderation rules can still override a pending submission.
+  if (moderation === "pending") {
+    const auto = await applyAutoModeration(mapId, { name, description });
+    if (auto) moderation = auto;
   }
 
   const zone: Zone = {

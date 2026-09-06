@@ -269,6 +269,44 @@ export interface MapBan {
   createdAt: string;
 }
 
+// A single auto-moderation rule. When a new submission matches, it is
+// auto-approved (trusted content) or auto-rejected (spam/off-topic) without
+// waiting for a moderator. `field` selects which part of the submission is
+// scanned; "any" covers name, tip, hours and tags together.
+export interface ModerationRule {
+  id: string; // client-generated stable id
+  action: "approve" | "reject";
+  field: "name" | "tip" | "tags" | "any";
+  pattern: string; // case-insensitive substring
+}
+
+// Per-map auto-moderation configuration (stored in Mongo, unlike Sanity map
+// settings). Reject rules win over approve rules when both match.
+export interface MapRules {
+  mapId: string;
+  enabled: boolean;
+  rules: ModerationRule[];
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+// Per-contributor aggregation for a map (from /api/admin/maps/contributors).
+export interface MapContributorEntry {
+  userId: string | null; // null = anonymous submission (map in "anyone" mode)
+  spots: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  hidden: number;
+  zones: number;
+  routes: number;
+  reviews: number;
+  comments: number;
+  photos: number;
+  total: number;
+  lastActive: string | null; // ISO date of their most recent contribution
+}
+
 export interface ProfileData {
   user: ProfileUser;
   stats: ProfileStats;

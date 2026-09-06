@@ -31,6 +31,12 @@ import {
   fetchAdminBans,
   banUser,
   unbanUser,
+  moderateSpotsBatch,
+  moderateZonesBatch,
+  moderateRoutesBatch,
+  exportMapBlob,
+  fetchMapContributors,
+  backendLive,
   type AdminMapEntry,
   type AdminSpotList,
   type AdminZoneList,
@@ -40,8 +46,9 @@ import {
   type AdminReport,
   type MapSettingsInput,
   type MapRoleEntry,
+  type BatchModerationAction,
 } from "@/lib/api-client";
-import type { Spot, Zone, Route, MapBan } from "@/lib/types";
+import type { Spot, Zone, Route, MapBan, MapContributorEntry } from "@/lib/types";
 import {
   MARKER_PRESETS,
   MARKER_COLORS,
@@ -65,6 +72,7 @@ import AdminReportsView from "./admin/AdminReportsView";
 import AdminBansView from "./admin/AdminBansView";
 import AdminModeratorsView from "./admin/AdminModeratorsView";
 import AdminSettingsView from "./admin/AdminSettingsView";
+import AdminContributorsView from "./admin/AdminContributorsView";
 
 interface EditState {
   spot: Spot;
@@ -161,7 +169,7 @@ export function AdminPanel() {
   const [mapsError, setMapsError] = useState("");
 
   const [activeMap, setActiveMap] = useState<AdminMapEntry | null>(null);
-  const [view, setView] = useState<"spots" | "zones" | "activity" | "reports" | "bans" | "settings" | "moderators">("spots");
+  const [view, setView] = useState<"spots" | "zones" | "activity" | "reports" | "bans" | "settings" | "moderators" | "contributors">("spots");
   const [data, setData] = useState<AdminSpotList | null>(null);
   const [loadingSpots, setLoadingSpots] = useState(false);
   const [error, setError] = useState("");
@@ -193,6 +201,10 @@ export function AdminPanel() {
   const [moderatorBusy, setModeratorBusy] = useState(false);
   const [moderatorError, setModeratorError] = useState("");
   const [moderatorNotice, setModeratorNotice] = useState("");
+
+  const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
+  const [contributors, setContributors] = useState<MapContributorEntry[]>([]);
+  const [loadingContributors, setLoadingContributors] = useState(false);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [confirmDestroy, setConfirmDestroy] = useState<Spot | null>(null);
@@ -433,6 +445,22 @@ export function AdminPanel() {
   useEffect(() => {
     if (activeMap && view === "moderators") loadModerators(activeMap._id);
   }, [activeMap, view, loadModerators]);
+
+  const loadContributors = useCallback(async (mapId: string) => {
+    setLoadingContributors(true);
+    try {
+      setContributors(await fetchMapContributors(mapId));
+    } catch (e) {
+      setError((e as Error).message || "Failed to load contributors");
+      setContributors([]);
+    } finally {
+      setLoadingContributors(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeMap && view === "contributors") loadContributors(activeMap._id);
+  }, [activeMap, view, loadContributors]);
 
   const handleAddModerator = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -702,6 +730,57 @@ export function AdminPanel() {
     await loadBans(activeMap._id);
   };
 
+  const runPendingBatch = async (
+    fn: (mapId: string, ids: string[], action: BatchModerationAction) => Promise<void>,
+    ids: string[],
+    action: BatchModerationAction
+  ) => {
+    if (!activeMap || ids.length === 0) return;
+    setError("");
+    try {
+      await fn(activeMap._id, ids, action);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message || "Batch action failed");
+    }
+  };
+
+  const handleBatchSpots = (action: BatchModerationAction, ids: string[]) =>
+    runPendingBatch(moderateSpotsBatch, ids, action);
+
+  const pendingZoneIds = () =>
+    (zoneData?.zones ?? [])
+      .filter((z) => z.moderation === "pending")
+      .map((z) => z._id as string);
+  const pendingRouteIds = () =>
+    (routeData?.routes ?? [])
+      .filter((r) => r.moderation === "pending")
+      .map((r) => r._id as string);
+
+  const handleApproveAllPendingZones = () =>
+    runPendingBatch(moderateZonesBatch, pendingZoneIds(), "approve");
+  const handleRejectAllPendingZones = () =>
+    runPendingBatch(moderateZonesBatch, pendingZoneIds(), "reject");
+  const handleApproveAllPendingRoutes = () =>
+    runPendingBatch(moderateRoutesBatch, pendingRouteIds(), "approve");
+  const handleRejectAllPendingRoutes = () =>
+    runPendingBatch(moderateRoutesBatch, pendingRouteIds(), "reject");
+
+  const handleExport = async (format: "geojson" | "csv") => {
+    if (!activeMap) return;
+    try {
+      await exportMapBlob(activeMap._id, format);
+    } catch (e) {
+      setError((e as Error).message || "Export failed");
+    }
+  };
+
+  const handleFilterByCreator = (userId: string | null) => {
+    setCreatorFilter(userId === null ? "" : userId);
+    setView("spots");
+    setEdit(null);
+  };
+
   if (!user) {
     return (
       <div className="admin-empty">
@@ -781,6 +860,7 @@ export function AdminPanel() {
                     setActiveMap(m);
                     setView("spots");
                     setEdit(null);
+                    setCreatorFilter(null);
                   }}
                 >
                   <span className="admin-map-tab-name">
@@ -846,6 +926,13 @@ export function AdminPanel() {
                   >
                     Bans
                   </button>
+                  <button
+                    type="button"
+                    className={`admin-inner-tab ${view === "contributors" ? "active" : ""}`}
+                    onClick={() => setView("contributors")}
+                  >
+                    Contributors
+                  </button>
                   {canManageMap && (
                     <button
                       type="button"
@@ -878,6 +965,24 @@ export function AdminPanel() {
                       >
                         {copied ? "Copied!" : "Copy"}
                       </button>
+                      {backendLive && (
+                        <>
+                          <button
+                            type="button"
+                            className="action-btn2"
+                            onClick={() => handleExport("geojson")}
+                          >
+                            Export GeoJSON
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn2"
+                            onClick={() => handleExport("csv")}
+                          >
+                            Export CSV
+                          </button>
+                        </>
+                      )}
                     </div>
                     <AdminSpotView
                       activeMap={activeMap}
@@ -885,6 +990,9 @@ export function AdminPanel() {
                       loadingSpots={loadingSpots}
                       error={error}
                       edit={edit}
+                      creatorFilter={creatorFilter}
+                      onClearCreatorFilter={() => setCreatorFilter(null)}
+                      onBatch={handleBatchSpots}
                       onStartEdit={(s) => {
                         setEdit({ spot: { ...s } });
                         setError("");
@@ -947,6 +1055,10 @@ export function AdminPanel() {
                     }
                     onToggleRouteHidden={(route) => handleRouteToggleHidden(route)}
                     onDestroyRoute={(route) => handleDestroyRoute(route)}
+                    onApproveAllPendingZones={handleApproveAllPendingZones}
+                    onRejectAllPendingZones={handleRejectAllPendingZones}
+                    onApproveAllPendingRoutes={handleApproveAllPendingRoutes}
+                    onRejectAllPendingRoutes={handleRejectAllPendingRoutes}
                   />
                 )}
 
@@ -1002,6 +1114,15 @@ export function AdminPanel() {
                     moderatorNotice={moderatorNotice}
                     onAddModerator={handleAddModerator}
                     onRemoveModerator={handleRemoveModerator}
+                  />
+                )}
+
+                {view === "contributors" && (
+                  <AdminContributorsView
+                    contributors={contributors}
+                    loading={loadingContributors}
+                    error={error}
+                    onFilterByCreator={handleFilterByCreator}
                   />
                 )}
 
@@ -1074,6 +1195,9 @@ export function AdminSpotRow({
   map,
   editing,
   editSpot,
+  selectable,
+  selected,
+  onToggleSelect,
   onStartEdit,
   onEditChange,
   onCancelEdit,
@@ -1087,6 +1211,9 @@ export function AdminSpotRow({
   map: AdminMapEntry;
   editing: boolean;
   editSpot: Spot | null;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onStartEdit: (s: Spot) => void;
   onEditChange: (s: Spot) => void;
   onCancelEdit: () => void;
@@ -1245,6 +1372,16 @@ export function AdminSpotRow({
   return (
     <li className={`admin-spot ${pending ? "pending" : ""} ${spot.hidden ? "hidden" : ""}`}>
       <div className="admin-spot-main">
+        {selectable && (
+          <label className="admin-select-check" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={Boolean(selected)}
+              onChange={onToggleSelect}
+              aria-label={`Select ${spot.name}`}
+            />
+          </label>
+        )}
         <div className="admin-spot-title">
           <MarkerPreview
             emoji={spot.marker ?? map.defaultMarker}

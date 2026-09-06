@@ -37,6 +37,8 @@ import type {
   Route,
   SpotReport,
   MapBan,
+  ModerationRule,
+  MapContributorEntry,
 } from "./types";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
@@ -601,6 +603,108 @@ export async function destroyRoute(routeId: string): Promise<void> {
   await req(`/api/admin/routes?routeId=${encodeURIComponent(routeId)}`, {
     method: "DELETE",
   });
+}
+
+// ---- Admin: bulk moderation (the moderation queue) ----
+export type BatchModerationAction = "approve" | "reject" | "hide" | "restore";
+
+export async function moderateSpotsBatch(
+  mapId: string,
+  ids: string[],
+  action: BatchModerationAction
+): Promise<void> {
+  if (!backendLive || ids.length === 0) return;
+  await req("/api/admin/spots/batch", {
+    method: "POST",
+    body: JSON.stringify({ mapId, ids, action }),
+  });
+}
+
+export async function moderateZonesBatch(
+  mapId: string,
+  ids: string[],
+  action: BatchModerationAction
+): Promise<void> {
+  if (!backendLive || ids.length === 0) return;
+  await req("/api/admin/zones/batch", {
+    method: "POST",
+    body: JSON.stringify({ mapId, ids, action }),
+  });
+}
+
+export async function moderateRoutesBatch(
+  mapId: string,
+  ids: string[],
+  action: BatchModerationAction
+): Promise<void> {
+  if (!backendLive || ids.length === 0) return;
+  await req("/api/admin/routes/batch", {
+    method: "POST",
+    body: JSON.stringify({ mapId, ids, action }),
+  });
+}
+
+// ---- Admin: export (GeoJSON / CSV) ----
+export async function exportMapBlob(
+  mapId: string,
+  format: "geojson" | "csv"
+): Promise<void> {
+  if (!backendLive) return;
+  const auth = await authHeaders();
+  const res = await fetch(
+    `/api/admin/maps/export?mapId=${encodeURIComponent(mapId)}&format=${format}`,
+    { headers: auth }
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = /filename="?([^";]+)/.exec(disposition);
+  const filename = match?.[1] || `map-${mapId}.${format === "csv" ? "csv" : "geojson"}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- Admin: auto-moderation rules ----
+export async function fetchAdminRules(
+  mapId: string
+): Promise<{ rules: { mapId: string; enabled: boolean; rules: ModerationRule[]; updatedBy: string | null; updatedAt: string } | null } | null> {
+  if (!backendLive) return null;
+  return req<{
+    rules: { mapId: string; enabled: boolean; rules: ModerationRule[]; updatedBy: string | null; updatedAt: string } | null;
+  }>(`/api/admin/maps/rules?mapId=${encodeURIComponent(mapId)}`);
+}
+
+export async function saveAdminRules(
+  mapId: string,
+  enabled: boolean,
+  rules: ModerationRule[]
+): Promise<{ ok: boolean; rules: { mapId: string; enabled: boolean; rules: ModerationRule[]; updatedBy: string | null; updatedAt: string } | null } | null> {
+  if (!backendLive) return null;
+  return req<{
+    ok: boolean;
+    rules: { mapId: string; enabled: boolean; rules: ModerationRule[]; updatedBy: string | null; updatedAt: string } | null;
+  }>("/api/admin/maps/rules", {
+    method: "PUT",
+    body: JSON.stringify({ mapId, enabled, rules }),
+  });
+}
+
+// ---- Admin: contributors ----
+export async function fetchMapContributors(
+  mapId: string
+): Promise<MapContributorEntry[]> {
+  if (!backendLive) return [];
+  const res = await req<{ contributors: MapContributorEntry[] }>(
+    `/api/admin/maps/contributors?mapId=${encodeURIComponent(mapId)}`
+  );
+  return res.contributors;
 }
 
 // ---- Admin: activity log (audit trail) ----
