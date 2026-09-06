@@ -75,7 +75,7 @@ export default async function MapPermalinkPage({
           <div className="admin-empty">
             <p>
               This map is private. If it&apos;s yours,{" "}
-              <Link href="/login">sign in</Link> to view it.
+              <Link href="/login" prefetch={false}>sign in</Link> to view it.
             </p>
           </div>
         </div>

@@ -44,8 +44,11 @@ export function MapCard({
       ? `/map?map=${encodeURIComponent(map.id)}`
       : "/map";
 
+  // prefetch={false}: the target is the heavy client-side /map/[slug] page, and
+  // prefetching each visible card would execute the dynamic route on Vercel for
+  // every homepage visit (~15 extra serverless requests). No navigation benefit.
   return (
-    <Link href={href} className="home-map-card">
+    <Link href={href} className="home-map-card" prefetch={false}>
       <div
         className="home-map-card-accent"
         style={map.coverUrl ? undefined : { background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}

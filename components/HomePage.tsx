@@ -87,10 +87,10 @@ export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
           can add a spot, rate it, and keep it up to date.
         </p>
         <div className="home-hero-actions">
-          <Link href="/map" className="action-btn home-hero-cta">
+          <Link href="/map" className="action-btn home-hero-cta" prefetch={false}>
             <IconMapMarker size={18} /> Explore the map
           </Link>
-          <Link href="/signup" className="action-btn2">
+          <Link href="/signup" className="action-btn2" prefetch={false}>
             Get started
           </Link>
         </div>
@@ -132,7 +132,7 @@ export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
             Add your favourite places, rate the ones you know, and help keep the
             map useful for everyone around you.
           </p>
-          <Link href="/map" className="action-btn home-cta-btn">
+          <Link href="/map" className="action-btn home-cta-btn" prefetch={false}>
             Add a spot to the map
           </Link>
         </div>

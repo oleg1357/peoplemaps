@@ -30,7 +30,7 @@ export default function GlobalError({
           <button type="button" className="action-btn" onClick={reset}>
             Try again
           </button>
-          <Link href="/map" className="action-btn2" style={{ textDecoration: "none" }}>
+          <Link href="/map" className="action-btn2" style={{ textDecoration: "none" }} prefetch={false}>
             Back to the map
           </Link>
         </div>

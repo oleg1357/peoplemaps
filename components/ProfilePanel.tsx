@@ -149,7 +149,7 @@ export default function ProfilePanel() {
                         >
                           <IconLink size={14} /> Copy
                         </a>
-                        <Link href="/dashboard" className="link-btn">
+                        <Link href="/dashboard" className="link-btn" prefetch={false}>
                           Manage
                         </Link>
                       </div>
@@ -191,12 +191,12 @@ export default function ProfilePanel() {
                 {data.maps.length === 0 ? (
                   <p className="empty-state">
                     You don&apos;t run any maps yet. Create one from{" "}
-                    <Link href="/dashboard">your dashboard</Link>.
+                    <Link href="/dashboard" prefetch={false}>your dashboard</Link>.
                   </p>
                 ) : (
                   <p className="muted">
                     Your maps are listed above. Manage spots and settings in{" "}
-                    <Link href="/dashboard">your dashboard</Link>.
+                    <Link href="/dashboard" prefetch={false}>your dashboard</Link>.
                   </p>
                 )}
               </div>
@@ -217,7 +217,7 @@ function SpotContributions({ data }: { data: ProfileData }) {
       <div className="profile-contrib empty">
         <p className="empty-state">
           You haven&apos;t added any spots yet. Head to the{" "}
-          <Link href="/map">map</Link> to add your first one.
+          <Link href="/map" prefetch={false}>map</Link> to add your first one.
         </p>
       </div>
     );
@@ -254,7 +254,7 @@ function SpotContributions({ data }: { data: ProfileData }) {
             <div className="profile-row-date muted">
               {formatDay(s.createdAt)}
             </div>
-            <Link href={mapHref({ mapSlug: s.mapSlug })} className="link-btn">
+            <Link href={mapHref({ mapSlug: s.mapSlug })} className="link-btn" prefetch={false}>
               View
             </Link>
           </li>
@@ -354,6 +354,7 @@ function PhotoContributions({ data }: { data: ProfileData }) {
             key={p._id}
             href={mapHref({ mapSlug: p.mapSlug, mapId: p.mapId })}
             className="profile-photo"
+            prefetch={false}
           >
             <img src={p.dataUrl} alt={p.spotName} />
             <span className="profile-photo-caption">{p.spotName}</span>

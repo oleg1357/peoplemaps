@@ -84,7 +84,7 @@ export function Nav() {
     <>
     <div id="nav">
       <div className="logo flex">
-        <Link href="/" className="logo-link" onClick={close}>
+        <Link href="/" className="logo-link" onClick={close} prefetch={false}>
           <PeopleMapsLogo size={30} />
           <h3 id="logo-text">PeopleMaps</h3>
         </Link>
@@ -96,21 +96,21 @@ export function Nav() {
         className={`nav-links ${open ? "open" : ""}`}
         aria-label="Main"
       >
-        <Link href="/" className={cls("/")} aria-current={current("/")} onClick={close}>
+        <Link href="/" className={cls("/")} aria-current={current("/")} onClick={close} prefetch={false}>
           Home
         </Link>
-        <Link id="map-link" href="/map" className={cls("/map")} aria-current={current("/map")} onClick={close}>
+        <Link id="map-link" href="/map" className={cls("/map")} aria-current={current("/map")} onClick={close} prefetch={false}>
           Maps
         </Link>
-        <Link href="/map?add=1" onClick={close}>
+        <Link href="/map?add=1" onClick={close} prefetch={false}>
           <IconMapMarker size={15} /> + Add spot
         </Link>
-        <Link href="/about" className={cls("/about")} aria-current={current("/about")} onClick={close}>
+        <Link href="/about" className={cls("/about")} aria-current={current("/about")} onClick={close} prefetch={false}>
           About
         </Link>
         {user ? (
           <>
-            <Link href="/dashboard" className={cls("/dashboard")} aria-current={current("/dashboard")} onClick={close}>
+            <Link href="/dashboard" className={cls("/dashboard")} aria-current={current("/dashboard")} onClick={close} prefetch={false}>
               Dashboard
             </Link>
             <a
@@ -126,10 +126,10 @@ export function Nav() {
           </>
         ) : (
           <>
-            <Link href="/signup" className={cls("/signup")} aria-current={current("/signup")} onClick={close}>
+            <Link href="/signup" className={cls("/signup")} aria-current={current("/signup")} onClick={close} prefetch={false}>
               Create profile
             </Link>
-            <Link href="/login" className={cls("/login")} aria-current={current("/login")} onClick={close}>
+            <Link href="/login" className={cls("/login")} aria-current={current("/login")} onClick={close} prefetch={false}>
               Login
             </Link>
           </>
