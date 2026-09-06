@@ -18,6 +18,7 @@ import {
   deleteSpot,
   createZone,
   createRoute,
+  clearDataCache,
   backendLive,
   type MapData,
 } from "@/lib/api-client";
@@ -112,13 +113,16 @@ export function MapProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Local, request-free updates after a mutation (review added, status set, …).
+  // The GET cache is dropped too, so the next full load of the map is honest.
   const patchMapData = useCallback((fn: (d: MapData) => MapData) => {
+    clearDataCache();
     setMapData((prev) => fn(prev));
   }, []);
 
   const addSpot = useCallback(
     async (input: Omit<Spot, "_id" | "createdAt">) => {
       const res = await createSpot(input);
+      clearDataCache();
       // The create response already contains the refreshed public list, so the
       // map updates without a second (follow-up) request.
       setMapData((prev) => ({ ...prev, spots: res.spots }));
@@ -130,6 +134,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const addZone = useCallback(
     async (input: Omit<Zone, "_id" | "createdAt">) => {
       const res = await createZone(input);
+      clearDataCache();
       setMapData((prev) => ({ ...prev, zones: res.zones }));
       return res;
     },
@@ -139,6 +144,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const addRoute = useCallback(
     async (input: Omit<Route, "_id" | "createdAt">) => {
       const res = await createRoute(input);
+      clearDataCache();
       setMapData((prev) => ({ ...prev, routes: res.routes }));
       return res;
     },
@@ -148,6 +154,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const removeSpot = useCallback(async (spotId: string) => {
     try {
       await deleteSpot(spotId);
+      clearDataCache();
       setMapData((prev) => {
         const spotReviewIds = prev.reviews
           .filter((r) => r.spotId === spotId)

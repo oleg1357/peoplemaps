@@ -99,9 +99,10 @@ export async function GET(req: Request) {
       { spots, reviews: reviewsWithVotes, comments, photos, zones, routes },
       {
         headers: {
-          // Public GET — short CDN cache so repeat visits (and the Next/Vercel
-          // cache) serve this without a fresh serverless invocation.
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
+          // Public GET — max-age lets repeat visits within a minute be served
+          // from the browser cache (zero requests), s-maxage/SWR cover the next
+          // 10 min from the Vercel CDN without a fresh serverless invocation.
+          "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=600",
         },
       }
     );

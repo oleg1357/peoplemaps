@@ -15,7 +15,9 @@ export async function GET(req: Request) {
     : await getAllPublicMaps();
   return json(maps, {
     headers: {
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
+      // max-age lets the BROWSER serve repeat visits within the window with no
+      // request at all; s-maxage/SWR let the Vercel CDN cover the next 10 min.
+      "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=600",
     },
   });
 }

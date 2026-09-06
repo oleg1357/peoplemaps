@@ -15,7 +15,11 @@ export async function GET(req: Request) {
       .find({ spotId })
       .sort({ date: -1 })
       .toArray();
-    return json(photos);
+    return json(photos, {
+      headers: {
+        "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=600",
+      },
+    });
   });
 }
 

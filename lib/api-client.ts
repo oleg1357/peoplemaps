@@ -64,8 +64,15 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
-async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const auth = await authHeaders();
+async function req<T>(
+  url: string,
+  init?: RequestInit,
+  opts?: { cache?: boolean }
+): Promise<T> {
+  // Public GETs skip the Authorization header so the browser and Vercel CDN are
+  // allowed to cache them (an Authorization header makes a response uncacheable
+  // for both, turning every map visit into a fresh function invocation).
+  const auth = opts?.cache ? {} : await authHeaders();
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -82,10 +89,34 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// 60s in-memory cache for the per-visit public GETs (the public map list and the
+// selected map's data). Repeat visits within the window issue zero requests,
+// which is the biggest lever on Vercel request counts. Cleared on any write via
+// clearDataCache() so the next load always sees fresh data.
+const GET_CACHE_TTL_MS = 60_000;
+const getCache = new Map<string, { ts: number; data: unknown }>();
+
+export function clearDataCache() {
+  getCache.clear();
+}
+
+async function cachedGet<T>(url: string): Promise<T> {
+  const hit = getCache.get(url);
+  if (hit && Date.now() - hit.ts < GET_CACHE_TTL_MS) return hit.data as T;
+  const data = await req<T>(url, undefined, { cache: true });
+  getCache.set(url, { ts: Date.now(), data });
+  return data;
+}
+
+// The public map list, shared by useMaps() across pages (no `owner`).
+export async function fetchPublicMaps(): Promise<MapDocument[]> {
+  return cachedGet<MapDocument[]>("/api/maps");
+}
+
 // ---- Spots ----
 export async function fetchMapSpots(mapId: string): Promise<Spot[]> {
   if (!backendLive) return demoFetchMapSpots(mapId);
-  return req<Spot[]>(`/api/spots?mapId=${encodeURIComponent(mapId)}`);
+  return cachedGet<Spot[]>(`/api/spots?mapId=${encodeURIComponent(mapId)}`);
 }
 
 // Everything the map view needs in a single request. Photo entries are
@@ -102,7 +133,7 @@ export interface MapData {
 
 export async function fetchMapData(mapId: string): Promise<MapData> {
   if (!backendLive) return demoFetchMapData(mapId);
-  return req<MapData>(`/api/map-data?mapId=${encodeURIComponent(mapId)}`);
+  return cachedGet<MapData>(`/api/map-data?mapId=${encodeURIComponent(mapId)}`);
 }
 
 // POST returns the created spot plus the updated public spot list for the map,
@@ -184,13 +215,13 @@ export async function createRoute(input: Omit<Route, "_id" | "createdAt">): Prom
 
 export async function fetchSpotById(spotId: string): Promise<Spot> {
   if (!backendLive) return (await demoFetchSpotById(spotId)) ?? ({} as Spot);
-  return req<Spot>(`/api/spots?spotId=${encodeURIComponent(spotId)}`);
+  return cachedGet<Spot>(`/api/spots?spotId=${encodeURIComponent(spotId)}`);
 }
 
 // ---- Reviews ----
 export async function fetchReviews(spotId: string): Promise<Review[]> {
   if (!backendLive) return demoFetchReviews(spotId);
-  return req<Review[]>(`/api/reviews?spotId=${encodeURIComponent(spotId)}`);
+  return cachedGet<Review[]>(`/api/reviews?spotId=${encodeURIComponent(spotId)}`);
 }
 
 export async function addReview(spotId: string, score: number, review: string, userId?: string | null): Promise<Review | null> {
@@ -238,7 +269,7 @@ export async function toggleHelpfulReview(reviewId: string, userId: string | nul
 // ---- Comments ----
 export async function fetchComments(reviewId: string): Promise<ReviewComment[]> {
   if (!backendLive) return demoFetchComments(reviewId);
-  return req<ReviewComment[]>(`/api/comments?reviewId=${encodeURIComponent(reviewId)}`);
+  return cachedGet<ReviewComment[]>(`/api/comments?reviewId=${encodeURIComponent(reviewId)}`);
 }
 
 export interface AddCommentOptions {
@@ -279,7 +310,7 @@ export async function deleteComment(commentId: string): Promise<void> {
 // ---- Photos ----
 export async function fetchPhotos(spotId: string): Promise<SpotPhoto[]> {
   if (!backendLive) return demoFetchPhotos(spotId);
-  return req<SpotPhoto[]>(`/api/photos?spotId=${encodeURIComponent(spotId)}`);
+  return cachedGet<SpotPhoto[]>(`/api/photos?spotId=${encodeURIComponent(spotId)}`);
 }
 
 export async function addSpotPhoto(spotId: string, dataUrl: string, userId?: string | null): Promise<SpotPhoto | null> {
@@ -289,7 +320,7 @@ export async function addSpotPhoto(spotId: string, dataUrl: string, userId?: str
 
 export async function getSpotPhotosCountApi(spotId: string): Promise<number> {
   if (!backendLive) return 0;
-  const res = await req<{ count: number }>(`/api/photos/count?spotId=${encodeURIComponent(spotId)}`);
+  const res = await cachedGet<{ count: number }>(`/api/photos/count?spotId=${encodeURIComponent(spotId)}`);
   return res.count;
 }
 

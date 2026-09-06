@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { client } from "./client";
 import { MAP_CORE_FIELDS, MAP_FIELDS } from "./queries";
+import { fetchPublicMaps, clearDataCache, backendLive } from "@/lib/api-client";
 import type { MapDocument } from "@/lib/types";
 
 export function useMapById(id: string | null): {
@@ -50,13 +51,29 @@ export function useMaps(ownerId?: string | null): {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    // Demo mode has no backend — MapContext serves the seeded demo maps, so
+    // skip the network call entirely.
+    if (!backendLive) {
+      setMaps([]);
+      setLoading(false);
+      return;
+    }
     // Fetch through our own API route so the browser never talks to Sanity
-    // directly. That avoids Sanity's per-origin CORS allow-list, which blocked
-    // this hook in production (the deployed origin wasn't whitelisted -> 403).
-    fetch(`/api/maps${ownerId ? `?owner=${encodeURIComponent(ownerId)}` : ""}`)
-      .then((r) => (r.ok ? r.json() : []))
+    // directly (Sanity's per-origin CORS allow-list blocked this in production).
+    // The public list goes through fetchPublicMaps(), which skips the auth header
+    // and serves a shared 60s cache so repeat visits issue no request. The owner
+    // list is user-scoped and therefore fetched uncached.
+    const request = ownerId
+      ? fetch(
+          `/api/maps?owner=${encodeURIComponent(ownerId)}`,
+          { cache: "no-store" }
+        )
+          .then((r) => (r.ok ? r.json() : ([] as MapDocument[])))
+          .catch(() => [] as MapDocument[])
+      : fetchPublicMaps();
+    request
       .then((data) => {
-        if (active) setMaps((data as MapDocument[]) ?? []);
+        if (active) setMaps(data ?? []);
       })
       .catch(() => {
         if (active) setMaps([]);
@@ -69,7 +86,10 @@ export function useMaps(ownerId?: string | null): {
     };
   }, [ownerId, tick]);
 
-  const reload = () => setTick((t) => t + 1);
+  const reload = () => {
+    clearDataCache();
+    setTick((t) => t + 1);
+  };
 
   return { maps, loading, reload };
 }

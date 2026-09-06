@@ -11,6 +11,7 @@ import {
   getUser,
 } from "./auth-store";
 import { supabase, supabaseConfigured } from "./supabase";
+import { clearDataCache } from "./api-client";
 
 // Minimal signed-in-user shape exposed to the rest of the app. Works for both
 // the Supabase path (string id) and the legacy demo-user path (numeric id).
@@ -196,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSbUserId(null);
     }
     clearLoggedInUser();
+    clearDataCache();
     setUserIdState(null);
     router.push("/about");
   }, [usingSupabase, router]);
