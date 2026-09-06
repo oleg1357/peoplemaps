@@ -10,6 +10,9 @@ interface SpotTooltipProps {
   score?: number | null;
   hint?: string;
   tag?: string;
+  priceLevel?: number | null;
+  tags?: string[];
+  tip?: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -50,6 +53,9 @@ export function SpotTooltip({
   score,
   hint = "Click to view",
   tag,
+  priceLevel,
+  tags,
+  tip,
 }: SpotTooltipProps) {
   const statusKey =
     status === "open" || status === "closed" || status === "unknown"
@@ -79,6 +85,28 @@ export function SpotTooltip({
       )}
 
       {score !== undefined && <ScoreFill value={score ?? null} />}
+
+      {(priceLevel !== undefined && priceLevel !== null) ||
+      (tags && tags.length > 0) ||
+      tip ? (
+        <div className="spot-tip-rich">
+          {priceLevel !== undefined && priceLevel !== null && (
+            <span className="spot-tip-price">
+              {"$".repeat(Math.max(1, priceLevel + 1))}
+            </span>
+          )}
+          {tags && tags.length > 0 && (
+            <span className="spot-tip-tags">
+              {tags.map((t) => (
+                <span key={t} className="spot-tip-tag2">
+                  {t}
+                </span>
+              ))}
+            </span>
+          )}
+          {tip && <span className="spot-tip-insider">💡 {tip}</span>}
+        </div>
+      ) : null}
 
       <div className="spot-tip-foot">
         <IconMapMarker size={11} />

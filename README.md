@@ -1,6 +1,6 @@
 # PeopleMaps
 
-PeopleMaps is a collaborative map of spots maintained by the people who use them. It started as a recreation of a dumpster-diving thesis project and has been generalized into a people-managed maps app: browse spots, rate and review them, keep their status up to date, save favourites and get notified when something new shows up on a spot you watch.
+PeopleMaps is a collaborative map of spots maintained by the people who use them. It started as a recreation of a dumpster-diving thesis project and has been generalized into a people-managed maps app: browse spots, rate and review them, keep their status up to date, and mark helpful reviews.
 
 ## Tech stack
 
@@ -20,11 +20,14 @@ Both modes share the same UI components; the `backendLive` flag in `lib/api-clie
 
 ## Features
 
-- Interactive map of spots with ratings, reviews and status (open / closed / unknown)
-- Add new spots, pick spots by category/city, search
-- Watch spots and get notified about new reviews
-- Save and manage your favourites
-- Profile pages and a public user page
+- Interactive map of spots (Leaflet / react-leaflet) with ratings, reviews, status (open / closed / unknown) and rich detail fields — price level, opening hours, tags and insider tips
+- Add new spots, search by name/city/street/tags, and pick a marker icon and colour
+- Community tools: rate and review, comment on reviews, upload photos, and vote on "helpful" reviews
+- Collaborative maps with zones (polygons/circles) and routes (polylines) drawn on the map
+- Per-map configuration: category + tags for discovery, collaboration modes (anyone / logged-in / owner & moderators only), clustering, welcome message and add-spot instructions, contact/website links
+- Moderation: map owners and moderators can approve, reject, hide or destroy spots, zones and routes; report and ban systems; an activity/audit log
+- Cover images per map, permalink slugs and a public profile / "my contributions" page
+- Home-page discovery with category filtering
 - Light/dark theme
 
 ## Demo account

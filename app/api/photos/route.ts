@@ -47,9 +47,10 @@ export async function POST(req: Request) {
   return withDb(async (db) => {
     const col = db.collection<SpotPhoto>(COLLECTIONS.photos);
     const spot = await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: spotId as never } as never);
-    const map = spot?.mapId ? await getMap(spot.mapId) : null;
+    if (!spot) return error("Spot not found", 404);
+    const map = spot.mapId ? await getMap(spot.mapId) : null;
     // Respect the map's allowPhotos toggle.
-    if (map && map.allowPhotos === false) {
+    if (map?.allowPhotos === false) {
       return error("Photo uploads are disabled for this map.", 403);
     }
     // Resolve the map's maxPhotosPerSpot setting instead of using a hardcoded limit.

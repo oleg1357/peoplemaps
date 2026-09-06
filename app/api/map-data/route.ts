@@ -1,7 +1,7 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, publicContentFilter } from "@/lib/api";
 import { getMap } from "@/lib/admin";
-import type { Spot, Review, ReviewComment, SpotPhoto, Zone, Route } from "@/lib/types";
+import type { Spot, Review, ReviewComment, SpotPhoto, Zone, Route, ReviewVote } from "@/lib/types";
 
 // GET /api/map-data?mapId=<id>
 // One request that loads everything the map view needs at once: the public
@@ -50,6 +50,23 @@ export async function GET(req: Request) {
 
     const reviewIds = reviews.map((r) => r._id!.toString());
 
+    // Helpful-vote tallies per review. Attached here (one aggregation instead
+    // of a request per review) so the panel can show counts immediately.
+    const voteRows = reviewIds.length
+      ? await db
+          .collection<ReviewVote>(COLLECTIONS.votes)
+          .aggregate<{ _id: string; count: number }>([
+            { $match: { reviewId: { $in: reviewIds } } },
+            { $group: { _id: "$reviewId", count: { $sum: 1 } } },
+          ])
+          .toArray()
+      : [];
+    const votesByReview = new Map(voteRows.map((v) => [v._id, v.count]));
+    const reviewsWithVotes = reviews.map((r) => ({
+      ...r,
+      helpfulCount: votesByReview.get(r._id!.toString()) ?? 0,
+    }));
+
     const comments = reviewIds.length
       ? await db
           .collection<ReviewComment>(COLLECTIONS.comments)
@@ -79,7 +96,7 @@ export async function GET(req: Request) {
       : [];
 
     return json(
-      { spots, reviews, comments, photos, zones, routes },
+      { spots, reviews: reviewsWithVotes, comments, photos, zones, routes },
       {
         headers: {
           // Public GET — short CDN cache so repeat visits (and the Next/Vercel

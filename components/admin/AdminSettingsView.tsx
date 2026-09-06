@@ -248,6 +248,33 @@ export default function AdminSettingsView({
       </div>
 
       <div className="admin-panel-group">
+        <h4>Discovery</h4>
+        <AdminField label="Category">
+          <select
+            value={draft.category ?? ""}
+            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+          >
+            <option value="">No category</option>
+            <option value="food">Food &amp; drink</option>
+            <option value="sights">Sightseeing</option>
+            <option value="shopping">Shopping</option>
+            <option value="outdoors">Outdoors</option>
+            <option value="nightlife">Nightlife</option>
+            <option value="arts">Arts &amp; culture</option>
+            <option value="sports">Sports</option>
+            <option value="other">Other</option>
+          </select>
+        </AdminField>
+        <AdminField label="Tags">
+          <input
+            value={draft.tags ?? ""}
+            onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
+            placeholder="e.g. hidden gems, family friendly, dog friendly"
+          />
+        </AdminField>
+      </div>
+
+      <div className="admin-panel-group">
         <h4>Content toggles</h4>
         <label className="admin-check">
           <input

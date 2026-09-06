@@ -38,10 +38,11 @@ export async function POST(req: Request) {
     user_fk: ctx.userId ?? body.user_fk ?? null,
   };
   return withDb(async (db) => {
-    // Respect the map's allowReviews toggle.
+    // The spot must exist and the map's allowReviews toggle must permit reviews.
     const spot = await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: body.spotId as never } as never);
-    const map = spot?.mapId ? await getMap(spot.mapId) : null;
-    if (map && map.allowReviews === false) {
+    if (!spot) return error("Spot not found", 404);
+    const map = spot.mapId ? await getMap(spot.mapId) : null;
+    if (map?.allowReviews === false) {
       return error("Reviews are disabled for this map.", 403);
     }
     const col = db.collection<Review>(COLLECTIONS.reviews);

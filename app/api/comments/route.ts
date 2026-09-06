@@ -42,13 +42,16 @@ export async function POST(req: Request) {
     parentId: typeof body.parentId === "string" && body.parentId ? body.parentId : null,
   };
   return withDb(async (db) => {
-    // Respect the map's allowComments toggle.
+    // The review (and its spot) must exist and the map's allowComments toggle
+    // must permit comments.
     const review = await db.collection<Review>(COLLECTIONS.reviews).findOne({ _id: comment.reviewId as never } as never);
-    const spot = review?.spotId
+    if (!review) return error("Review not found", 404);
+    const spot = review.spotId
       ? await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: review.spotId as never } as never)
       : null;
-    const map = spot?.mapId ? await getMap(spot.mapId) : null;
-    if (map && map.allowComments === false) {
+    if (!spot) return error("Spot not found", 404);
+    const map = spot.mapId ? await getMap(spot.mapId) : null;
+    if (map?.allowComments === false) {
       return error("Comments are disabled for this map.", 403);
     }
     const col = db.collection<ReviewComment>(COLLECTIONS.comments);

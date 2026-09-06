@@ -1,14 +1,19 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, isValidLatLng, publicContentFilter } from "@/lib/api";
-import { getAdminContext, getMap, isMapModerator } from "@/lib/admin";
+import { getAdminContext, getMap, isGlobalAdmin, isMapModerator } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import { hasValidColor } from "@/lib/markers-data";
-import type { Filter } from "mongodb";
-import type { Zone } from "@/lib/types";
+import type { Filter, Db } from "mongodb";
+import type { Zone, MapBan } from "@/lib/types";
 
 const MAX_NAME = 60;
 const MAX_DESC = 300;
 const MAX_VERTICES = 500;
+
+// True when the user is banned from contributing to this map.
+async function isBanned(db: Db, mapId: string, userId: string): Promise<boolean> {
+  return !!(await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId }));
+}
 
 // Public (map-visible) zones: approved or pre-moderation, never hidden.
 function publicZonesQuery(mapId: string): Filter<Zone> {
@@ -78,17 +83,35 @@ export async function POST(req: Request) {
     return error("Zone shape must be 'polygon' or 'circle'.");
   }
 
-  // Spot submission rules apply to zones too: owners/admins/moderators (and maps
-  // with approval off) go straight to approved; everyone else is pending.
+  // Zone submission rules mirror spots: anyone (when the map allows it) or a
+  // signed-in user; "invitedOnly" restricts to owner/moderators/global admins.
+  // Identity comes from the session cookie, never the request body.
   const ctx = await getAdminContext(req);
-  if (!ctx.userId) return error("You must be signed in to add a zone.", 401);
+  const userId = ctx.userId;
+  const map = await getMap(mapId);
+
+  const mode = map?.collaborationMode ?? "loggedIn";
+  if (mode !== "anyone") {
+    if (!ctx.userId) return error("You must be signed in to add a zone.", 401);
+  }
+  if (mode === "invitedOnly" && ctx.userId) {
+    const allowed =
+      isGlobalAdmin(ctx.userId) ||
+      (map?.ownerId && map.ownerId === ctx.userId) ||
+      (await isMapModerator(mapId, ctx.userId));
+    if (!allowed) {
+      return error(
+        "Only the map owner and moderators can add zones to this map.",
+        403
+      );
+    }
+  }
 
   let moderation: Zone["moderation"] = "pending";
-  const map = await getMap(mapId);
   if (
-    ctx.isGlobalAdmin ||
-    (map?.ownerId && map.ownerId === ctx.userId) ||
-    (await isMapModerator(mapId, ctx.userId))
+    (ctx.userId && isGlobalAdmin(ctx.userId)) ||
+    (map?.ownerId && ctx.userId && map.ownerId === ctx.userId) ||
+    (ctx.userId && (await isMapModerator(mapId, ctx.userId)))
   ) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
@@ -104,13 +127,16 @@ export async function POST(req: Request) {
     radius,
     color,
     description,
-    createdBy: ctx.userId,
+    createdBy: userId,
     createdAt: new Date().toISOString(),
     moderation,
     hidden: false,
   };
 
   return withDb(async (db) => {
+    if (userId && (await isBanned(db, mapId, userId))) {
+      return error("You are banned from contributing to this map.", 403);
+    }
     const col = db.collection<Zone>(COLLECTIONS.zones);
     const result = await col.insertOne(zone);
     // Re-run moderation on the object for the entry name (avoiding a re-query).

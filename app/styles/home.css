@@ -145,6 +145,57 @@
   flex-wrap: wrap;
 }
 
+.home-map-card-category {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--green-dark);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.home-map-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0 24px;
+}
+
+.home-map-filter {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.home-map-filter:hover {
+  border-color: var(--green);
+  color: var(--ink);
+}
+
+.home-map-filter.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.home-map-card-desc {
+  margin: 0 0 16px;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .home-map-card-stat {
   display: inline-flex;
   align-items: center;

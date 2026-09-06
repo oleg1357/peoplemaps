@@ -1,5 +1,28 @@
 import { sanityConfigured } from "@/sanity/lib/client";
 import { supabase, supabaseConfigured } from "./supabase";
+import {
+  demoFetchMapData,
+  demoFetchMapSpots,
+  demoCreateSpot,
+  demoUpdateOwnSpot,
+  demoDeleteSpot,
+  demoCreateZone,
+  demoCreateRoute,
+  demoFetchSpotById,
+  demoFetchReviews,
+  demoAddReview,
+  demoUpdateReview,
+  demoDeleteReview,
+  demoFetchStatus,
+  demoSetStatus,
+  demoToggleHelpfulReview,
+  demoFetchComments,
+  demoAddComment,
+  demoDeleteComment,
+  demoFetchPhotos,
+  demoAddSpotPhoto,
+  demoReportSpot as demoReportSpotFn,
+} from "./demo-store";
 import type {
   Spot,
   Review,
@@ -61,7 +84,7 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 
 // ---- Spots ----
 export async function fetchMapSpots(mapId: string): Promise<Spot[]> {
-  if (!backendLive) return [];
+  if (!backendLive) return demoFetchMapSpots(mapId);
   return req<Spot[]>(`/api/spots?mapId=${encodeURIComponent(mapId)}`);
 }
 
@@ -78,9 +101,7 @@ export interface MapData {
 }
 
 export async function fetchMapData(mapId: string): Promise<MapData> {
-  if (!backendLive) {
-    return { spots: [], reviews: [], comments: [], photos: [], zones: [], routes: [] };
-  }
+  if (!backendLive) return demoFetchMapData(mapId);
   return req<MapData>(`/api/map-data?mapId=${encodeURIComponent(mapId)}`);
 }
 
@@ -92,7 +113,7 @@ export interface CreateSpotResult {
 }
 
 export async function createSpot(input: Omit<Spot, "_id" | "createdAt">): Promise<CreateSpotResult> {
-  if (!backendLive) throw new Error("backend not configured");
+  if (!backendLive) return demoCreateSpot(input);
   return req<CreateSpotResult>("/api/spots", {
     method: "POST",
     body: JSON.stringify(input),
@@ -112,9 +133,13 @@ export async function updateOwnSpot(
     lng?: number;
     marker?: string | null;
     markerColor?: string | null;
+    priceLevel?: number | null;
+    hoursNote?: string | null;
+    tags?: string[] | null;
+    tip?: string | null;
   }
 ): Promise<Spot | null> {
-  if (!backendLive) return null;
+  if (!backendLive) return demoUpdateOwnSpot(spotId, fields);
   const res = await req<{ ok: boolean; spot: Spot | null }>("/api/spots", {
     method: "PATCH",
     body: JSON.stringify({ spotId, ...fields }),
@@ -123,7 +148,7 @@ export async function updateOwnSpot(
 }
 
 export async function deleteSpot(spotId: string): Promise<void> {
-  if (!backendLive) return;
+  if (!backendLive) return demoDeleteSpot(spotId);
   await req(`/api/spots?spotId=${encodeURIComponent(spotId)}`, { method: "DELETE" });
 }
 
@@ -136,7 +161,7 @@ export interface CreateZoneResult {
 // POST returns the created zone plus the updated public zone list for the map,
 // so the caller can refresh in a single request.
 export async function createZone(input: Omit<Zone, "_id" | "createdAt">): Promise<CreateZoneResult> {
-  if (!backendLive) throw new Error("backend not configured");
+  if (!backendLive) return demoCreateZone(input);
   return req<CreateZoneResult>("/api/zones", {
     method: "POST",
     body: JSON.stringify(input),
@@ -150,7 +175,7 @@ export interface CreateRouteResult {
 }
 
 export async function createRoute(input: Omit<Route, "_id" | "createdAt">): Promise<CreateRouteResult> {
-  if (!backendLive) throw new Error("backend not configured");
+  if (!backendLive) return demoCreateRoute(input);
   return req<CreateRouteResult>("/api/routes", {
     method: "POST",
     body: JSON.stringify(input),
@@ -158,18 +183,18 @@ export async function createRoute(input: Omit<Route, "_id" | "createdAt">): Prom
 }
 
 export async function fetchSpotById(spotId: string): Promise<Spot> {
-  if (!backendLive) return {} as Spot;
+  if (!backendLive) return (await demoFetchSpotById(spotId)) ?? ({} as Spot);
   return req<Spot>(`/api/spots?spotId=${encodeURIComponent(spotId)}`);
 }
 
 // ---- Reviews ----
 export async function fetchReviews(spotId: string): Promise<Review[]> {
-  if (!backendLive) return [];
+  if (!backendLive) return demoFetchReviews(spotId);
   return req<Review[]>(`/api/reviews?spotId=${encodeURIComponent(spotId)}`);
 }
 
 export async function addReview(spotId: string, score: number, review: string, userId?: string | null): Promise<Review | null> {
-  if (!backendLive) return null;
+  if (!backendLive) return demoAddReview(spotId, score, review, userId);
   return req<Review>("/api/reviews", {
     method: "POST",
     body: JSON.stringify({ spotId, score, review, user_fk: userId }),
@@ -177,29 +202,29 @@ export async function addReview(spotId: string, score: number, review: string, u
 }
 
 export async function updateReview(reviewId: string, review: string, score: number): Promise<void> {
-  if (!backendLive) return;
+  if (!backendLive) return demoUpdateReview(reviewId, review, score);
   await req("/api/reviews", { method: "PATCH", body: JSON.stringify({ id: reviewId, review, score }) });
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {
-  if (!backendLive) return;
+  if (!backendLive) return demoDeleteReview(reviewId);
   await req(`/api/reviews?id=${encodeURIComponent(reviewId)}`, { method: "DELETE" });
 }
 
 // ---- Status ----
 export async function fetchStatus(spotId: string): Promise<SpotStatus> {
-  if (!backendLive) return "open";
+  if (!backendLive) return demoFetchStatus(spotId);
   return (await req<{ status: SpotStatus }>(`/api/spots/status?spotId=${encodeURIComponent(spotId)}`)).status;
 }
 
 export async function setStatus(spotId: string, status: SpotStatus): Promise<void> {
-  if (!backendLive) return;
+  if (!backendLive) return demoSetStatus(spotId, status);
   await req("/api/spots/status", { method: "POST", body: JSON.stringify({ spotId, status }) });
 }
 
 // ---- Votes ----
 export async function toggleHelpfulReview(reviewId: string, userId: string | null): Promise<{ count: number; voted: boolean }> {
-  if (!backendLive) return { count: 0, voted: false };
+  if (!backendLive) return demoToggleHelpfulReview(reviewId, userId);
   if (!userId) {
     return req<{ count: number; voted: boolean }>(`/api/votes?reviewId=${encodeURIComponent(reviewId)}`);
   }
@@ -212,7 +237,7 @@ export async function toggleHelpfulReview(reviewId: string, userId: string | nul
 
 // ---- Comments ----
 export async function fetchComments(reviewId: string): Promise<ReviewComment[]> {
-  if (!backendLive) return [];
+  if (!backendLive) return demoFetchComments(reviewId);
   return req<ReviewComment[]>(`/api/comments?reviewId=${encodeURIComponent(reviewId)}`);
 }
 
@@ -227,7 +252,11 @@ export async function addComment(
   text: string,
   opts: AddCommentOptions = {}
 ): Promise<ReviewComment | null> {
-  if (!backendLive) return null;
+  if (!backendLive) return demoAddComment(reviewId, text, {
+    userId: opts.userId,
+    parentId: opts.parentId ?? null,
+    authorName: opts.authorName,
+  });
   return req<ReviewComment>("/api/comments", {
     method: "POST",
     body: JSON.stringify({
@@ -241,7 +270,7 @@ export async function addComment(
 }
 
 export async function deleteComment(commentId: string): Promise<void> {
-  if (!backendLive) return;
+  if (!backendLive) return demoDeleteComment(commentId);
   await req(`/api/comments?id=${encodeURIComponent(commentId)}`, {
     method: "DELETE",
   });
@@ -249,12 +278,12 @@ export async function deleteComment(commentId: string): Promise<void> {
 
 // ---- Photos ----
 export async function fetchPhotos(spotId: string): Promise<SpotPhoto[]> {
-  if (!backendLive) return [];
+  if (!backendLive) return demoFetchPhotos(spotId);
   return req<SpotPhoto[]>(`/api/photos?spotId=${encodeURIComponent(spotId)}`);
 }
 
 export async function addSpotPhoto(spotId: string, dataUrl: string, userId?: string | null): Promise<SpotPhoto | null> {
-  if (!backendLive) return null;
+  if (!backendLive) return demoAddSpotPhoto(spotId, dataUrl, userId);
   return req<SpotPhoto>("/api/photos", { method: "POST", body: JSON.stringify({ spotId, dataUrl, user_fk: userId }) });
 }
 
@@ -307,6 +336,8 @@ export interface CreateMapInput {
   allowPhotos?: boolean;
   collaborationMode?: "anyone" | "loggedIn" | "invitedOnly";
   enableClustering?: boolean;
+  category?: string;
+  tags?: string;
 }
 
 export async function createMap(input: CreateMapInput): Promise<{ _id: string; title: string; slug: string | null }> {
@@ -389,7 +420,22 @@ export async function setSpotHidden(spotId: string, hidden: boolean): Promise<vo
 export async function updateSpotFields(
   spotId: string,
   fields: Partial<
-    Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status" | "marker" | "markerColor">
+    Pick<
+      Spot,
+      | "name"
+      | "street"
+      | "city"
+      | "zip"
+      | "lat"
+      | "lng"
+      | "status"
+      | "marker"
+      | "markerColor"
+      | "priceLevel"
+      | "hoursNote"
+      | "tags"
+      | "tip"
+    >
   >
 ): Promise<void> {
   await req("/api/admin/spots", {
@@ -566,7 +612,7 @@ export async function fetchAdminActivity(
 export type AdminReport = SpotReport;
 
 export async function reportSpot(spotId: string, reason: string): Promise<{ ok: boolean; alreadyReported: boolean }> {
-  if (!backendLive) return { ok: false, alreadyReported: false };
+  if (!backendLive) return demoReportSpotFn(spotId, reason);
   return req<{ ok: boolean; alreadyReported: boolean }>("/api/spots/report", {
     method: "POST",
     body: JSON.stringify({ spotId, reason }),

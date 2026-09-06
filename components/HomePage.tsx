@@ -1,53 +1,78 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { PeopleMapsLogo } from "./Logo";
 import { MapCard, type HomeMapCardData } from "./MapCard";
 import { IconMapMarker } from "./icons";
+import { backendLive } from "@/lib/api-client";
 
+export const HOME_CATEGORIES: { value: string; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "food", label: "Food & drink" },
+  { value: "sights", label: "Sightseeing" },
+  { value: "shopping", label: "Shopping" },
+  { value: "outdoors", label: "Outdoors" },
+  { value: "nightlife", label: "Nightlife" },
+  { value: "arts", label: "Arts & culture" },
+  { value: "sports", label: "Sports" },
+  { value: "other", label: "Other" },
+];
+
+// Demo-mode cards. Ids match the seeded localStorage maps (lib/demo-data.ts) so
+// "Open map" lands on the right map. Only shown when no backend is configured.
 const DEMO_MAPS: HomeMapCardData[] = [
   {
-    id: "cph-groceries",
+    id: "demo-cph-groceries",
     title: "Copenhagen Groceries",
     description:
       "The best supermarkets and discount shops across Copenhagen, rated by the people who shop there every day.",
     ownerName: "PeopleMaps Demo",
-    spotCount: 12,
+    spotCount: 5,
     accent: "#61C67A",
+    category: "shopping",
   },
   {
-    id: "coffee",
+    id: "demo-coffee",
     title: "Best Coffee in Copenhagen",
     description:
       "Third-wave coffee spots, hidden cafes and roasteries worth an extra stop on your commute.",
     ownerName: "Anna K.",
-    spotCount: 8,
+    spotCount: 4,
     accent: "#C99A5B",
+    category: "food",
   },
   {
-    id: "parks",
+    id: "demo-parks",
     title: "Hidden Parks & Gardens",
     description:
       "Quiet green corners and pocket parks for a sunny lunch or a peaceful afternoon read.",
     ownerName: "Marcus L.",
-    spotCount: 6,
+    spotCount: 3,
     accent: "#4BB0E8",
+    category: "outdoors",
   },
   {
-    id: "streetfood",
+    id: "demo-streetfood",
     title: "Street Food Favorites",
     description:
       "The stalls and food markets locals actually queue for — plus what to order when you get there.",
     ownerName: "Sofia M.",
-    spotCount: 10,
+    spotCount: 3,
     accent: "#F0AD00",
+    category: "food",
   },
 ];
 
 export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
   // Public maps + their spot counts are resolved server-side (see app/page.tsx)
   // and passed in as props, so the homepage makes no client data requests.
-  const allMaps = [...liveMaps, ...DEMO_MAPS];
+  // Demo cards only appear when the real backend isn't configured.
+  const allMaps = backendLive ? liveMaps : DEMO_MAPS;
+
+  const [category, setCategory] = useState("");
+  const filtered =
+    category === "" ? allMaps : allMaps.filter((m) => (m.category ?? "") === category);
 
   return (
     <div className="page home-page">
@@ -76,11 +101,28 @@ export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
         <p className="home-section-sub muted">
           A few maps created and kept fresh by the community.
         </p>
+        <div className="home-map-filters">
+          {HOME_CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={`home-map-filter ${category === c.value ? "active" : ""}`}
+              onClick={() => setCategory(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
         <div className="home-maps-grid">
-          {allMaps.map((m, i) => (
+          {filtered.map((m, i) => (
             <MapCard key={m.id} map={m} index={i} />
           ))}
         </div>
+        {filtered.length === 0 && (
+          <p className="home-section-sub muted" style={{ textAlign: "center" }}>
+            No maps in this category yet.
+          </p>
+        )}
       </section>
 
       <section className="home-cta">

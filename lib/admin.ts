@@ -1,5 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase-server";
 import { serverClient } from "@/sanity/lib/client";
+import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import type { MapDocument, MapRole } from "@/lib/types";
 
@@ -36,34 +37,6 @@ export async function getAdminContext(req: Request): Promise<AdminContext> {
   // No Supabase configured: fall back to the legacy bearer-as-user behavior.
   return { userId: bearer, isGlobalAdmin: isGlobalAdmin(bearer) };
 }
-
-const MAP_PROJECTION = `{
-  _id,
-  _createdAt,
-  title,
-  "slug": slug.current,
-  description,
-  ownerId,
-  ownerName,
-  isPublic,
-  baseCenter,
-  baseZoom,
-  accentColor,
-  defaultMarker,
-  defaultMarkerColor,
-  welcomeMessage,
-  submissionNote,
-  maxPhotosPerSpot,
-  requireApproval,
-  coverImage,
-  contactEmail,
-  website,
-  allowReviews,
-  allowComments,
-  allowPhotos,
-  collaborationMode,
-  enableClustering,
-}`;
 
 // Fetches all public maps, newest first. Used by the public map client (via the
 // /api/maps route) and the homepage.

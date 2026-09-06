@@ -8,6 +8,7 @@ import { reportSpot } from "@/lib/api-client";
 export interface SpotDetailBundle {
   reviews: Array<Review & { author: string; comments: Array<ReviewComment & { author: string }> }>;
   photos: SpotPhotoMeta[];
+  avgScore: number | null;
 }
 
 export interface EditState {
@@ -41,6 +42,14 @@ interface SpotDetailPanelProps {
   setEditMarker: (v: string | null) => void;
   editMarkerColor: string | null;
   setEditMarkerColor: (v: string | null) => void;
+  editPriceLevel: number | null;
+  setEditPriceLevel: (v: number | null) => void;
+  editHoursNote: string;
+  setEditHoursNote: (v: string) => void;
+  editTagsText: string;
+  setEditTagsText: (v: string) => void;
+  editTip: string;
+  setEditTip: (v: string) => void;
   editSpotError: string;
   editing: EditState | null;
   setEditing: (v: EditState | null) => void;
@@ -96,6 +105,14 @@ export function SpotDetailPanel({
   setEditMarker,
   editMarkerColor,
   setEditMarkerColor,
+  editPriceLevel,
+  setEditPriceLevel,
+  editHoursNote,
+  setEditHoursNote,
+  editTagsText,
+  setEditTagsText,
+  editTip,
+  setEditTip,
   editSpotError,
   editing,
   setEditing,
@@ -160,6 +177,31 @@ export function SpotDetailPanel({
             ))}
           </div>
         </div>
+        {(selected.priceLevel !== undefined && selected.priceLevel !== null) ||
+        selected.hoursNote ||
+        (selected.tags && selected.tags.length > 0) ||
+        selected.tip ? (
+          <div className="spot-meta">
+            {selected.priceLevel !== undefined && selected.priceLevel !== null && (
+              <span className="spot-meta-item" title="Price level">
+                {"$".repeat(Math.max(1, selected.priceLevel + 1))}
+              </span>
+            )}
+            {selected.hoursNote && (
+              <span className="spot-meta-item">🕒 {selected.hoursNote}</span>
+            )}
+            {selected.tags && selected.tags.length > 0 && (
+              <span className="spot-meta-item">
+                {selected.tags.map((t) => (
+                  <span key={t} className="spot-tag">
+                    {t}
+                  </span>
+                ))}
+              </span>
+            )}
+            {selected.tip && <p className="spot-tip">💡 {selected.tip}</p>}
+          </div>
+        ) : null}
         {userId && selected.createdBy === userId && (
           <div className="status-row" style={{ gap: 8 }}>
             <button
@@ -213,6 +255,22 @@ export function SpotDetailPanel({
               onChange={(e) => setEditZip(Number(e.target.value))}
               placeholder="Zip"
             />
+            <div className="spot-form-grid">
+              <select
+                value={editPriceLevel === null ? "" : editPriceLevel}
+                onChange={(e) => setEditPriceLevel(e.target.value ? Number(e.target.value) : null)}
+                title="Price level"
+              >
+                <option value="">Price (optional)</option>
+                <option value="0">$ — cheap</option>
+                <option value="1">$$ — moderate</option>
+                <option value="2">$$$ — upscale</option>
+                <option value="3">$$$$ — premium</option>
+              </select>
+              <input value={editHoursNote} onChange={(e) => setEditHoursNote(e.target.value)} placeholder="Hours (e.g. Mon–Fri 08:00–18:00)" />
+              <input value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)} placeholder="Tags (comma separated)" />
+              <textarea value={editTip} onChange={(e) => setEditTip(e.target.value)} rows={2} placeholder="Insider tip (e.g. best time to visit)" />
+            </div>
             <div className="marker-picker-inline">
               {MARKER_PRESETS.map((m) => (
                 <button
@@ -273,6 +331,26 @@ export function SpotDetailPanel({
             )}
 
             <div id="reviews-box">
+              {bundle.avgScore !== null && (
+                <div className="avg-rating">
+                  <span className="avg-rating-score">
+                    {bundle.avgScore.toFixed(1)}
+                  </span>
+                  <span className="avg-rating-stars">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span
+                        key={n}
+                        className={n <= Math.round(bundle.avgScore as number) ? "on" : ""}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </span>
+                  <span className="avg-rating-count">
+                    from {bundle.reviews.length} review{bundle.reviews.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              )}
               {bundle.reviews.map((r) => (
                 <div id="reviews" key={r._id}>
                   <div className="review-head">
@@ -282,8 +360,12 @@ export function SpotDetailPanel({
                   </div>
                   <p style={{ margin: "6px 0" }}>{r.review || <span className="italic">No review</span>}</p>
                   <div className="review-actions">
-                    <button type="button" className="helpful-btn" onClick={() => r._id && handleVote(r._id)}>
-                      Helpful
+                    <button
+                      type="button"
+                      className={`helpful-btn ${r.voted ? "voted" : ""}`}
+                      onClick={() => r._id && handleVote(r._id)}
+                    >
+                      Helpful{r.helpfulCount ? ` (${r.helpfulCount})` : ""}
                     </button>
                     {r._id && allowComments !== false && (
                       <button

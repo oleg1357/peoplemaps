@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { client } from "./client";
-import { MAP_FIELDS } from "./queries";
+import { MAP_CORE_FIELDS, MAP_FIELDS } from "./queries";
 import type { MapDocument } from "@/lib/types";
 
 export function useMapById(id: string | null): {
@@ -21,7 +21,7 @@ export function useMapById(id: string | null): {
     setLoading(true);
     client
       .fetch(
-        `*[_id == $id][0]{ _id, _createdAt, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom${MAP_FIELDS} }`,
+        `*[_id == $id][0]{ ${MAP_CORE_FIELDS} ${MAP_FIELDS} }`,
         { id }
       )
       .then((data) => {

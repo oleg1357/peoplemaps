@@ -2,6 +2,7 @@ import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { getAdminContext, canManageMap, getMap } from "@/lib/admin";
+import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { serverClient, writeClient } from "@/sanity/lib/client";
 import { getServerSupabase } from "@/lib/supabase-server";
 import {
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
 
   try {
     maps = await serverClient.fetch<MapDocument[]>(
-      `*[_type == "map"] | order(_createdAt desc){ _id, title, "slug": slug.current, description, ownerId, ownerName, isPublic, baseCenter, baseZoom, accentColor, defaultMarker, defaultMarkerColor, welcomeMessage, submissionNote, maxPhotosPerSpot, requireApproval }`
+      `*[_type == "map"] | order(_createdAt desc)${MAP_PROJECTION}`
     );
   } catch {
     maps = [];
@@ -171,6 +172,13 @@ export async function POST(req: Request) {
     : "loggedIn";
   const enableClustering = body.enableClustering === true;
 
+  const category = ["food", "sights", "shopping", "outdoors", "nightlife", "arts", "sports", "other"].includes(
+    String(body.category)
+  )
+    ? String(body.category)
+    : "";
+  const tags = String(body.tags ?? "").slice(0, 200);
+
   try {
     const doc = await writeClient.create({
       _type: "map",
@@ -199,6 +207,8 @@ export async function POST(req: Request) {
       allowPhotos,
       collaborationMode,
       enableClustering,
+      category,
+      tags,
     });
     return json(
       { _id: doc._id, title: doc.title, slug: doc.slug?.current ?? null },
@@ -305,6 +315,20 @@ export async function PATCH(req: Request) {
   }
   if (input.enableClustering !== undefined) {
     patch.enableClustering = input.enableClustering === true;
+  }
+  if (input.category !== undefined) {
+    if (
+      input.category !== "" &&
+      !["food", "sights", "shopping", "outdoors", "nightlife", "arts", "sports", "other"].includes(
+        String(input.category)
+      )
+    ) {
+      return json({ error: "Invalid category." }, { status: 400 });
+    }
+    patch.category = String(input.category ?? "");
+  }
+  if (input.tags !== undefined) {
+    patch.tags = String(input.tags ?? "").slice(0, 200);
   }
   if (input.baseCenter !== undefined) {
     const c = input.baseCenter as { lat?: number; lng?: number };

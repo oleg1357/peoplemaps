@@ -16,6 +16,10 @@ interface AddSpotFormProps {
   pickMarkerColor: string;
   setNewMarker: (v: string | null) => void;
   setNewMarkerColor: (v: string | null) => void;
+  setPriceLevel: (v: number | null) => void;
+  setHoursNote: (v: string) => void;
+  setTagsText: (v: string) => void;
+  setTip: (v: string) => void;
   activeMap: MapLike | null;
   onSubmit: (e: React.FormEvent) => void;
 }
@@ -27,6 +31,10 @@ export function AddSpotForm({
   pickMarkerColor,
   setNewMarker,
   setNewMarkerColor,
+  setPriceLevel,
+  setHoursNote,
+  setTagsText,
+  setTip,
   activeMap,
   onSubmit,
 }: AddSpotFormProps) {
@@ -36,6 +44,18 @@ export function AddSpotForm({
       className="map-draw-card"
     >
       <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
+      <div className="spot-form-grid">
+        <select onChange={(e) => setPriceLevel(e.target.value ? Number(e.target.value) : null)} title="Price level">
+          <option value="">Price (optional)</option>
+          <option value="0">$ — cheap</option>
+          <option value="1">$$ — moderate</option>
+          <option value="2">$$$ — upscale</option>
+          <option value="3">$$$$ — premium</option>
+        </select>
+        <input onChange={(e) => setHoursNote(e.target.value)} placeholder="Hours (optional) e.g. Mon–Fri 08:00–18:00" />
+        <input onChange={(e) => setTagsText(e.target.value)} placeholder="Tags (optional, comma separated)" />
+        <textarea onChange={(e) => setTip(e.target.value)} rows={2} placeholder="Insider tip (optional), e.g. best time to visit" />
+      </div>
       {activeMap?.submissionNote && (
         <div
           className="map-submit-note"

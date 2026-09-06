@@ -23,6 +23,12 @@ export interface Spot {
   // Marker look (emoji + color). Falls back to the map's defaults when unset.
   marker?: string | null;
   markerColor?: string | null;
+  // Rich content: price level (0-3, like $ to $$$), opening hours as free text,
+  // tags for discovery, and an insider tip ("best time to visit").
+  priceLevel?: number | null;
+  hoursNote?: string | null;
+  tags?: string[] | null;
+  tip?: string | null;
   // Moderation / admin fields
   moderation?: ModerationStatus;
   hidden?: boolean;
@@ -38,6 +44,9 @@ export interface Review {
   score: number;
   date: string;
   user_fk?: string | null; // supabase user id
+  // Helpful-vote aggregate + current viewer's vote, attached by /api/map-data.
+  helpfulCount?: number;
+  voted?: boolean;
 }
 
 export interface ReviewComment {
@@ -133,7 +142,9 @@ export interface MapDocument {
   description?: string;
   ownerId?: string; // supabase user id of the map creator
   ownerName?: string;
-  isPublic?: boolean;
+  // Sanity stores this as the string "public" / "private" (radio list), so the
+  // type mirrors the document value rather than a boolean.
+  isPublic?: "public" | "private";
   baseCenter?: { lat: number; lng: number };
   baseZoom?: number;
   // Map-owner settings
@@ -153,6 +164,9 @@ export interface MapDocument {
   allowPhotos?: boolean | null;
   collaborationMode?: "anyone" | "loggedIn" | "invitedOnly" | null;
   enableClustering?: boolean | null;
+  // Discovery: primary category + comma-separated tag keywords.
+  category?: string | null;
+  tags?: string | null;
 }
 
 // ---- Profile / "my contributions" (served by GET /api/me) ----

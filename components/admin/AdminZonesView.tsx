@@ -77,6 +77,10 @@ export default function AdminZonesView({
           <b>{routeData?.pending ?? "–"}</b>
           <span>Pending</span>
         </div>
+        <div className="admin-stat hidden">
+          <b>{routeData?.hidden ?? "–"}</b>
+          <span>Hidden</span>
+        </div>
       </div>
 
       {error && <p className="auth-error">{error}</p>}

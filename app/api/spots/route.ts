@@ -101,6 +101,20 @@ export async function POST(req: Request) {
   // map's default on the client.
   const marker = sanitizeMarkerEmoji(String(body.marker ?? ""));
 
+  // Rich content fields — sanitized, optional, and capped so one contributor
+  // can't bloat a spot.
+  const priceLevel = [0, 1, 2, 3].includes(Number(body.priceLevel))
+    ? Number(body.priceLevel)
+    : null;
+  const hoursNote = String(body.hoursNote ?? "").slice(0, 120) || null;
+  const tags = Array.isArray(body.tags)
+    ? (body.tags as unknown[])
+        .map((t) => String(t).trim().slice(0, 24))
+        .filter(Boolean)
+        .slice(0, 8)
+    : [];
+  const tip = String(body.tip ?? "").slice(0, 280) || null;
+
   const spot: Spot = {
     mapId,
     name: String(body.name),
@@ -115,6 +129,10 @@ export async function POST(req: Request) {
     hidden: false,
     reviewNote: null,
     marker: marker ?? undefined,
+    priceLevel,
+    hoursNote,
+    tags,
+    tip,
   };
   return withDb(async (db) => {
     if (userId && (await isBanned(db, mapId, userId))) {
@@ -182,6 +200,10 @@ export async function PATCH(req: Request) {
     lng?: number;
     marker?: string | null;
     markerColor?: string | null;
+    priceLevel?: number | null;
+    hoursNote?: string | null;
+    tags?: string[] | null;
+    tip?: string | null;
   };
   if (!body.spotId) return error("Missing spotId");
   const spotId = body.spotId;
@@ -235,6 +257,25 @@ export async function PATCH(req: Request) {
         return error("Invalid marker color.");
       }
       set.markerColor = body.markerColor;
+    }
+    if (body.priceLevel !== undefined) {
+      set.priceLevel = [0, 1, 2, 3].includes(num(body.priceLevel))
+        ? num(body.priceLevel)
+        : null;
+    }
+    if (body.hoursNote !== undefined) {
+      set.hoursNote = String(body.hoursNote ?? "").slice(0, 120) || null;
+    }
+    if (body.tags !== undefined) {
+      set.tags = Array.isArray(body.tags)
+        ? (body.tags as unknown[])
+            .map((t) => String(t).trim().slice(0, 24))
+            .filter(Boolean)
+            .slice(0, 8)
+        : [];
+    }
+    if (body.tip !== undefined) {
+      set.tip = String(body.tip ?? "").slice(0, 280) || null;
     }
 
     if (Object.keys(set).length === 0) return error("Nothing to update");

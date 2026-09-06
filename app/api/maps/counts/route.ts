@@ -3,13 +3,19 @@ import { withDb, json } from "@/lib/api";
 import type { Spot } from "@/lib/types";
 
 // GET /api/maps/counts -> { counts: Record<mapId, number> }
-// Spot total per map (all visibility/moderation states), used by the homepage
-// cards as a lightweight supplement to the Sanity map list.
+// Publicly visible spot total per map (approved or pre-moderation, never hidden),
+// used by the homepage cards. Matches what the map view itself shows.
 export async function GET() {
   return withDb(async (db) => {
     const col = db.collection<Spot>(COLLECTIONS.spots);
     const rows = await col
       .aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+            hidden: { $ne: true },
+          },
+        },
         { $group: { _id: "$mapId", count: { $sum: 1 } } },
       ])
       .toArray();

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMaps } from "@/sanity/lib/maps";
+import { DEMO_MAPS } from "@/lib/demo-data";
 import type { MapDocument, Spot, Zone, Route } from "@/lib/types";
 import {
   fetchMapData,
@@ -61,13 +62,14 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const [mapData, setMapData] = useState<MapData>(EMPTY_DATA);
   const [spotsLoading, setSpotsLoading] = useState(false);
 
-  const maps = useMemo(
-    () =>
-      seededMap
-        ? [seededMap, ...publicMaps.filter((m) => m._id !== seededMap._id)]
-        : publicMaps,
-    [seededMap, publicMaps]
-  );
+  const maps = useMemo(() => {
+    // Demo mode (no backend configured) serves the seeded demo maps so the map
+    // view is usable out of the box. Backend mode uses the live Sanity list.
+    const source = backendLive ? publicMaps : DEMO_MAPS;
+    return seededMap
+      ? [seededMap, ...source.filter((m) => m._id !== seededMap._id)]
+      : source;
+  }, [seededMap, publicMaps]);
 
   const activeMap =
     maps.find((m) => m._id === activeMapId) ?? maps[0] ?? null;

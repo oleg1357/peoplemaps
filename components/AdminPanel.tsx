@@ -471,7 +471,7 @@ export function AdminPanel() {
     setDraft({
       title: activeMap.title,
       description: activeMap.description ?? "",
-      isPublic: activeMap.isPublic ? "public" : "private",
+      isPublic: activeMap.isPublic === "private" ? "private" : "public",
       accentColor: activeMap.accentColor ?? DEFAULT_ACCENT,
       defaultMarker: activeMap.defaultMarker ?? DEFAULT_MARKER.emoji,
       defaultMarkerColor: activeMap.defaultMarkerColor ?? DEFAULT_MARKER.color,
@@ -487,6 +487,9 @@ export function AdminPanel() {
       allowComments: activeMap.allowComments ?? true,
       allowPhotos: activeMap.allowPhotos ?? true,
       collaborationMode: activeMap.collaborationMode ?? "loggedIn",
+      enableClustering: activeMap.enableClustering ?? false,
+      category: activeMap.category ?? "",
+      tags: activeMap.tags ?? "",
     });
   }, [activeMap?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1158,6 +1161,62 @@ export function AdminSpotRow({
         </div>
 
         <div className="admin-panel-group">
+          <h4>Rich content</h4>
+          <AdminField label="Price level">
+            <select
+              value={editSpot.priceLevel === null || editSpot.priceLevel === undefined ? "" : editSpot.priceLevel}
+              onChange={(e) =>
+                onEditChange({
+                  ...editSpot,
+                  priceLevel: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            >
+              <option value="">Not set</option>
+              <option value="0">$ — cheap</option>
+              <option value="1">$$ — moderate</option>
+              <option value="2">$$$ — upscale</option>
+              <option value="3">$$$$ — premium</option>
+            </select>
+          </AdminField>
+          <AdminField label="Hours">
+            <input
+              value={editSpot.hoursNote ?? ""}
+              onChange={(e) =>
+                onEditChange({ ...editSpot, hoursNote: e.target.value })
+              }
+              placeholder="e.g. Mon–Fri 08:00–18:00"
+            />
+          </AdminField>
+          <AdminField label="Tags">
+            <input
+              value={(editSpot.tags ?? []).join(", ")}
+              onChange={(e) =>
+                onEditChange({
+                  ...editSpot,
+                  tags: e.target.value
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                    .slice(0, 8),
+                })
+              }
+              placeholder="Comma separated"
+            />
+          </AdminField>
+          <AdminField label="Insider tip">
+            <textarea
+              rows={2}
+              value={editSpot.tip ?? ""}
+              onChange={(e) =>
+                onEditChange({ ...editSpot, tip: e.target.value })
+              }
+              placeholder="e.g. best time to visit"
+            />
+          </AdminField>
+        </div>
+
+        <div className="admin-panel-group">
           <MarkerPicker
             emoji={editSpot.marker ?? map.defaultMarker ?? DEFAULT_MARKER.emoji}
             color={
@@ -1207,6 +1266,17 @@ export function AdminSpotRow({
             "No address"}
           {spot.createdAt &&
             ` · ${new Date(spot.createdAt).toLocaleDateString()}`}
+          {spot.priceLevel !== null && spot.priceLevel !== undefined && (
+            <span className="admin-spot-meta-chip">
+              {"$".repeat(Math.max(1, spot.priceLevel + 1))}
+            </span>
+          )}
+          {spot.tags && spot.tags.length > 0 && (
+            <span className="admin-spot-meta-chip">
+              {spot.tags.join(", ")}
+            </span>
+          )}
+          {spot.tip && <span className="admin-spot-meta-chip">💡 {spot.tip}</span>}
         </div>
       </div>
 

@@ -12,7 +12,20 @@ export interface HomeMapCardData {
   spotCount: number;
   accent?: string;
   coverUrl?: string | null;
+  category?: string | null;
+  tags?: string | null;
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  food: "Food & drink",
+  sights: "Sightseeing",
+  shopping: "Shopping",
+  outdoors: "Outdoors",
+  nightlife: "Nightlife",
+  arts: "Arts & culture",
+  sports: "Sports",
+  other: "Other",
+};
 
 export function MapCard({
   map,
@@ -23,7 +36,13 @@ export function MapCard({
 }) {
   const hues = ["#61C67A", "#69D57C", "#4BB0E8", "#F0AD00", "#E8796F"];
   const accent = map.accent ?? hues[index % hues.length];
-  const href = map.slug ? `/map/${encodeURIComponent(map.slug)}` : "/map";
+  // Sluggable maps get a permalink; everything else deep-links to the shared
+  // /map page with `?map=<id>` (which the map page resolves against its list).
+  const href = map.slug
+    ? `/map/${encodeURIComponent(map.slug)}`
+    : map.id
+      ? `/map?map=${encodeURIComponent(map.id)}`
+      : "/map";
 
   return (
     <Link href={href} className="home-map-card">
@@ -40,6 +59,11 @@ export function MapCard({
       <div className="home-map-card-body">
         <h3>{map.title}</h3>
         <p className="home-map-card-desc">{map.description}</p>
+        {map.category && (
+          <span className="home-map-card-category">
+            {CATEGORY_LABELS[map.category] ?? map.category}
+          </span>
+        )}
         <div className="home-map-card-meta">
           <span className="home-map-card-stat">
             <IconMapMarker size={14} />

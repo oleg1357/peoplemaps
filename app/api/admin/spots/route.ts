@@ -35,7 +35,22 @@ export async function PATCH(req: Request) {
     moderation?: ModerationStatus | null;
     hidden?: boolean;
     fields?: Partial<
-      Pick<Spot, "name" | "street" | "city" | "zip" | "lat" | "lng" | "status" | "marker" | "markerColor">
+      Pick<
+        Spot,
+        | "name"
+        | "street"
+        | "city"
+        | "zip"
+        | "lat"
+        | "lng"
+        | "status"
+        | "marker"
+        | "markerColor"
+        | "priceLevel"
+        | "hoursNote"
+        | "tags"
+        | "tip"
+      >
     >;
   };
   if (!spotId) return error("Missing spotId");
@@ -94,6 +109,25 @@ export async function PATCH(req: Request) {
           return error("Invalid marker color.");
         }
         set.markerColor = fields.markerColor;
+      }
+      if (fields.priceLevel !== undefined) {
+        set.priceLevel = [0, 1, 2, 3].includes(Number(fields.priceLevel))
+          ? Number(fields.priceLevel)
+          : null;
+      }
+      if (fields.hoursNote !== undefined) {
+        set.hoursNote = String(fields.hoursNote ?? "").slice(0, 120) || null;
+      }
+      if (fields.tags !== undefined) {
+        set.tags = Array.isArray(fields.tags)
+          ? (fields.tags as unknown[])
+              .map((t) => String(t).trim().slice(0, 24))
+              .filter(Boolean)
+              .slice(0, 8)
+          : [];
+      }
+      if (fields.tip !== undefined) {
+        set.tip = String(fields.tip ?? "").slice(0, 280) || null;
       }
     }
 

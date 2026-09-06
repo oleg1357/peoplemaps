@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Tooltip, useMap, Polygon, Polyline, Circle, CircleMarker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
@@ -101,9 +101,11 @@ function FlyToView({
 export function MapsHomePage({
   initialCenter,
   initialZoom,
+  initialAdd,
 }: {
   initialCenter?: [number, number];
   initialZoom?: number;
+  initialAdd?: boolean;
 }) {
   const { theme } = useTheme();
   const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
@@ -113,6 +115,10 @@ export function MapsHomePage({
     useMapData();
   const router = useRouter();
   const baseCenter = activeMap?.baseCenter;
+  // "anyone" maps let anonymous visitors contribute; every other mode requires
+  // a signed-in account. (Moderator/owner-only restrictions on "invitedOnly"
+  // maps are enforced server-side.)
+  const canContribute = !!(userId || activeMap?.collaborationMode === "anyone");
   const baseZoom = activeMap?.baseZoom;
   const [mapCenter, setMapCenter] = useState<[number, number]>(
     initialCenter ?? (baseCenter ? [baseCenter.lat, baseCenter.lng] : CENTER)
@@ -152,6 +158,10 @@ export function MapsHomePage({
   const [newName, setNewName] = useState("");
   const [newMarker, setNewMarker] = useState<string | null>(null);
   const [newMarkerColor, setNewMarkerColor] = useState<string | null>(null);
+  const [newPriceLevel, setNewPriceLevel] = useState<number | null>(null);
+  const [newHoursNote, setNewHoursNote] = useState("");
+  const [newTagsText, setNewTagsText] = useState("");
+  const [newTip, setNewTip] = useState("");
   const [addError, setAddError] = useState("");
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   // Zone/route drawing state.
@@ -190,6 +200,20 @@ export function MapsHomePage({
     }
   }, [activeMap?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Opening the page via ?add=1 (the nav "+ Add spot" CTA) pre-opens the
+  // add-spot flow. Requires a signed-in user (or an "anyone" map).
+  useEffect(() => {
+    if (!initialAdd) return;
+    setDrawMode(null);
+    setDrawPoints([]);
+    setAddError("");
+    if (!canContribute) {
+      setAddError("You must be signed in to add a spot.");
+      return;
+    }
+    setAdding(true);
+  }, [initialAdd, canContribute]);
+
   const pickMarkerEmoji =
     newMarker ?? activeMap?.defaultMarker ?? DEFAULT_MARKER.emoji;
   const pickMarkerColor =
@@ -199,19 +223,38 @@ export function MapsHomePage({
     DEFAULT_MARKER.color;
 
   // Search/filter derived views. A spot matches when the query is a
-  // case-insensitive substring of its name, city or street.
+  // case-insensitive substring of its name, city, street or tags.
   const q = searchQuery.trim().toLowerCase();
   const searchableSpots = q
     ? spots.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.city?.toLowerCase().includes(q) ||
-          s.street?.toLowerCase().includes(q)
+          s.street?.toLowerCase().includes(q) ||
+          (s.tags ?? []).some((t) => t.toLowerCase().includes(q))
       )
     : spots;
   const visibleSpots = showSpots ? searchableSpots : [];
   const visibleZones = showZones ? zones : [];
   const visibleRoutes = showRoutes ? routes : [];
+
+  // Average rating per spot, so map tooltips can show the community score
+  // without an extra fetch per marker.
+  const avgBySpot = useMemo(() => {
+    const sums = new Map<string, { total: number; count: number }>();
+    for (const r of mapData.reviews) {
+      if (!Number.isFinite(r.score)) continue;
+      const cur = sums.get(r.spotId) ?? { total: 0, count: 0 };
+      cur.total += r.score;
+      cur.count += 1;
+      sums.set(r.spotId, cur);
+    }
+    const out = new Map<string, number>();
+    for (const [spotId, v] of sums) {
+      if (v.count > 0) out.set(spotId, v.total / v.count);
+    }
+    return out;
+  }, [mapData.reviews]);
 
   const loadBundle = (spot: Spot, data: MapData): SpotDetailBundle => {
     const reviews = data.reviews
@@ -228,9 +271,14 @@ export function MapsHomePage({
               (c.user_fk ? `User ${c.user_fk.slice(0, 6)}` : "Anonymous"),
           })),
       }));
+    const scores = reviews.map((r) => r.score).filter((n) => Number.isFinite(n));
+    const avgScore = scores.length
+      ? scores.reduce((a, b) => a + b, 0) / scores.length
+      : null;
     return {
       reviews,
       photos: data.photos.filter((p) => p.spotId === spot._id),
+      avgScore,
     };
   };
 
@@ -290,7 +338,17 @@ export function MapsHomePage({
   };
 
   const handleVote = async (reviewId: string) => {
-    await toggleHelpfulReview(reviewId, userId);
+    const res = await toggleHelpfulReview(reviewId, userId);
+    if (res) {
+      patchMapData((d) => ({
+        ...d,
+        reviews: d.reviews.map((r) =>
+          r._id === reviewId
+            ? { ...r, helpfulCount: res.count, voted: res.voted }
+            : r
+        ),
+      }));
+    }
   };
 
   const handleEditReview = async (reviewId: string, review: string, score: number) => {
@@ -312,6 +370,10 @@ export function MapsHomePage({
   const [editZip, setEditZip] = useState(0);
   const [editMarker, setEditMarker] = useState<string | null>(null);
   const [editMarkerColor, setEditMarkerColor] = useState<string | null>(null);
+  const [editPriceLevel, setEditPriceLevel] = useState<number | null>(null);
+  const [editHoursNote, setEditHoursNote] = useState("");
+  const [editTagsText, setEditTagsText] = useState("");
+  const [editTip, setEditTip] = useState("");
   const [editSpotError, setEditSpotError] = useState("");
 
   // Report a spot for moderator review.
@@ -335,6 +397,10 @@ export function MapsHomePage({
     setEditZip(spot.zip ? Number(spot.zip) : 0);
     setEditMarker(spot.marker ?? null);
     setEditMarkerColor(spot.markerColor ?? null);
+    setEditPriceLevel(spot.priceLevel ?? null);
+    setEditHoursNote(spot.hoursNote ?? "");
+    setEditTagsText((spot.tags ?? []).join(", "));
+    setEditTip(spot.tip ?? "");
     setEditSpotError("");
     setEditingSpot(true);
   };
@@ -350,6 +416,10 @@ export function MapsHomePage({
       zip: editZip,
       marker: editMarker,
       markerColor: editMarkerColor,
+      priceLevel: editPriceLevel,
+      hoursNote: editHoursNote.trim(),
+      tags: editTagsText.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 8),
+      tip: editTip.trim(),
     });
     if (!updated) {
       setEditSpotError("Could not save your changes.");
@@ -501,7 +571,7 @@ export function MapsHomePage({
       );
       return;
     }
-    if (!userId) {
+    if (!canContribute) {
       setDrawError("You must be signed in to add a " + type + ".");
       return;
     }
@@ -543,7 +613,7 @@ export function MapsHomePage({
     ev.preventDefault();
     setAddError("");
     if (!activeMap || !draft || !newName.trim()) return;
-    if (!userId && activeMap.collaborationMode !== "anyone") {
+    if (!canContribute) {
       setAddError("You must be signed in to add a spot.");
       return;
     }
@@ -559,8 +629,16 @@ export function MapsHomePage({
         createdBy: userId,
         marker: pickMarkerEmoji,
         markerColor: pickMarkerColor,
+        priceLevel: newPriceLevel,
+        hoursNote: newHoursNote.trim(),
+        tags: newTagsText.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 8),
+        tip: newTip.trim(),
       });
       setNewName("");
+      setNewPriceLevel(null);
+      setNewHoursNote("");
+      setNewTagsText("");
+      setNewTip("");
       setAdding(false);
       setDraft(null);
       if (spot) {
@@ -674,7 +752,7 @@ export function MapsHomePage({
         onClick={() => {
           setAddError("");
           cancelDraw();
-          if (!userId) {
+          if (!canContribute) {
             setAddError("You must be signed in to add a spot.");
             return;
           }
@@ -773,6 +851,14 @@ export function MapsHomePage({
           setEditMarker={setEditMarker}
           editMarkerColor={editMarkerColor}
           setEditMarkerColor={setEditMarkerColor}
+          editPriceLevel={editPriceLevel}
+          setEditPriceLevel={setEditPriceLevel}
+          editHoursNote={editHoursNote}
+          setEditHoursNote={setEditHoursNote}
+          editTagsText={editTagsText}
+          setEditTagsText={setEditTagsText}
+          editTip={editTip}
+          setEditTip={setEditTip}
           editSpotError={editSpotError}
           editing={editing}
           setEditing={setEditing}
@@ -896,7 +982,11 @@ export function MapsHomePage({
                       street={s.street}
                       city={s.city}
                       status={s.status}
+                      score={avgBySpot.get(s._id ?? "") ?? null}
                       hint="Click to view details"
+                      priceLevel={s.priceLevel}
+                      tags={s.tags ?? undefined}
+                      tip={s.tip}
                     />
                   </Tooltip>
                 </Marker>
@@ -922,7 +1012,11 @@ export function MapsHomePage({
                     street={s.street}
                     city={s.city}
                     status={s.status}
+                    score={avgBySpot.get(s._id ?? "") ?? null}
                     hint="Click to view details"
+                    priceLevel={s.priceLevel}
+                    tags={s.tags ?? undefined}
+                    tip={s.tip}
                   />
                 </Tooltip>
               </Marker>
@@ -993,6 +1087,10 @@ export function MapsHomePage({
           pickMarkerColor={pickMarkerColor}
           setNewMarker={setNewMarker}
           setNewMarkerColor={setNewMarkerColor}
+          setPriceLevel={setNewPriceLevel}
+          setHoursNote={setNewHoursNote}
+          setTagsText={setNewTagsText}
+          setTip={setNewTip}
           activeMap={activeMap}
           onSubmit={handleAddSpot}
         />

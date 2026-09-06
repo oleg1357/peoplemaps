@@ -194,6 +194,30 @@ export const map = defineType({
       type: "boolean",
       initialValue: false,
     }),
+    defineField({
+      name: "category",
+      title: "Category",
+      description: "Primary category used for home-page filtering and discovery.",
+      type: "string",
+      options: {
+        list: [
+          { title: "Food & drink", value: "food" },
+          { title: "Sightseeing", value: "sights" },
+          { title: "Shopping", value: "shopping" },
+          { title: "Outdoors", value: "outdoors" },
+          { title: "Nightlife", value: "nightlife" },
+          { title: "Arts & culture", value: "arts" },
+          { title: "Sports", value: "sports" },
+          { title: "Other", value: "other" },
+        ],
+      },
+    }),
+    defineField({
+      name: "tags",
+      title: "Tags",
+      description: "Free-form keywords for discovery (comma separated).",
+      type: "string",
+    }),
   ],
   preview: {
     select: {

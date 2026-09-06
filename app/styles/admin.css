@@ -305,6 +305,17 @@
   margin-top: 3px;
 }
 
+.admin-spot-meta-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--green-dark);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
 .admin-row-actions {
   display: flex;
   align-items: center;

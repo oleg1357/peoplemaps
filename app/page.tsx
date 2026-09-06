@@ -73,14 +73,20 @@ async function fetchLiveMaps(): Promise<HomeMapCardData[]> {
       PUBLIC_MAPS_QUERY
     )) ?? [];
 
-    // One aggregated Mongo call for the spot totals (all visibility states),
-    // same as the old client-side /api/maps/counts.
+    // One aggregated Mongo call for the publicly visible spot totals (approved
+    // or pre-moderation, not hidden) — matches what the map view shows.
     const counts: Record<string, number> = {};
     const db = await getDb();
     if (db) {
       const rows = await db
         .collection<Spot>(COLLECTIONS.spots)
         .aggregate<{ _id: string; count: number }>([
+          {
+            $match: {
+              $or: [{ moderation: "approved" }, { moderation: { $exists: false } }],
+              hidden: { $ne: true },
+            },
+          },
           { $group: { _id: "$mapId", count: { $sum: 1 } } },
         ])
         .toArray();
@@ -96,6 +102,8 @@ async function fetchLiveMaps(): Promise<HomeMapCardData[]> {
       spotCount: counts[m._id] ?? 0,
       accent: m.accentColor ?? undefined,
       coverUrl: coverImageUrl(m.coverImage),
+      category: m.category ?? null,
+      tags: m.tags ?? null,
     }));
   } catch {
     // If Sanity or Mongo are unavailable, fall back to the demo cards only.
