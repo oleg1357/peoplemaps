@@ -1,6 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import type { ActivityEntry } from "@/lib/activity";
 import type { Filter } from "mongodb";
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   const rawLimit = Number(searchParams.get("limit"));

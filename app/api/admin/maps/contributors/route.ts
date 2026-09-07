@@ -1,5 +1,5 @@
 import { json, error, withDb } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { COLLECTIONS } from "@/lib/mongodb";
 import type {
   Spot,
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {

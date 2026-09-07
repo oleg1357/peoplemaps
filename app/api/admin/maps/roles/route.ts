@@ -3,9 +3,10 @@ import { COLLECTIONS } from "@/lib/mongodb";
 import { json, withDb, error } from "@/lib/api";
 import { getAdminContext, canManageMap, getMapModerators } from "@/lib/admin";
 import { getServerSupabase } from "@/lib/supabase-server";
+import { MAP_ROLE_TYPES, type MapRoleType } from "@/lib/roles";
 import type { MapRole } from "@/lib/types";
 
-// GET /api/admin/maps/roles?mapId=<mapId> -> moderators for a map (owner only)
+// GET /api/admin/maps/roles?mapId=<mapId> -> team members for a map (owner only)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mapId = searchParams.get("mapId");
@@ -15,23 +16,29 @@ export async function GET(req: Request) {
   const perm = await canManageMap(ctx, mapId);
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
-  const moderators = await getMapModerators(mapId);
-  return json({ mapId, moderators });
+  const members = await getMapModerators(mapId);
+  return json({ mapId, members });
 }
 
-// POST /api/admin/maps/roles -> add a moderator by email (owner only)
+// POST /api/admin/maps/roles -> add a team member by email + role (owner only)
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     mapId?: string;
     email?: string;
+    role?: string;
   };
   if (!body.mapId) return error("Missing mapId");
   const mapId = body.mapId;
   const email = String(body.email ?? "").trim().toLowerCase();
-  if (!email) return error("Missing moderator email");
+  if (!email) return error("Missing email");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return error("Invalid email address.");
   }
+
+  const role: MapRoleType =
+    body.role && (MAP_ROLE_TYPES as readonly string[]).includes(body.role)
+      ? (body.role as MapRoleType)
+      : "moderator";
 
   const ctx = await getAdminContext(req);
   const perm = await canManageMap(ctx, mapId);
@@ -74,23 +81,27 @@ export async function POST(req: Request) {
 
     // Don't de-dup existing rows — reject duplicates.
     if (await col.findOne({ mapId, userId })) {
-      return error("That user is already a moderator of this map.", 409);
+      return error("That user is already on this map's team.", 409);
     }
 
-    const role: MapRole = {
+    const member: MapRole = {
       mapId,
       userId,
+      role,
       displayName,
       addedBy: ctx.userId!,
       addedAt: new Date().toISOString(),
     };
-    const result = await col.insertOne(role);
-    const moderators = await getMapModerators(mapId);
-    return json({ ok: true, moderator: { ...role, _id: result.insertedId }, moderators }, { status: 201 });
+    const result = await col.insertOne(member);
+    const members = await getMapModerators(mapId);
+    return json(
+      { ok: true, member: { ...member, _id: result.insertedId }, members },
+      { status: 201 }
+    );
   });
 }
 
-// DELETE /api/admin/maps/roles?mapId=<mapId>&userId=<userId> -> remove a moderator (owner only)
+// DELETE /api/admin/maps/roles?mapId=<mapId>&userId=<userId> -> remove a team member (owner only)
 export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const mapId = searchParams.get("mapId");
@@ -105,7 +116,7 @@ export async function DELETE(req: Request) {
     const col = db.collection<MapRole>(COLLECTIONS.mapRoles);
     const result = await col.deleteOne({ mapId, userId });
     if (result.deletedCount === 0) {
-      return error("That user is not a moderator of this map.", 404);
+      return error("That user is not on this map's team.", 404);
     }
     return NextResponse.json({ ok: true });
   });

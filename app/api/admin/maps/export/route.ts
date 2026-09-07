@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { error, withDb } from "@/lib/api";
-import { getAdminContext, canModerateMap, getMap } from "@/lib/admin";
+import { getAdminContext, canOnMap, getMap } from "@/lib/admin";
 import { COLLECTIONS } from "@/lib/mongodb";
 import type { Spot, Zone, Route, GeoPoint } from "@/lib/types";
 
@@ -93,7 +93,7 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "export");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   const map = await getMap(mapId);

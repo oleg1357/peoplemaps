@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import type { Route, ModerationStatus } from "@/lib/types";
 
 // Admin-only routes for route management. Access mirrors spots: the map owner,
-// configured global admins, and designated moderators may review/edit/destroy
-// routes on the map.
+// global admins, and team members with the matching capability.
 
 // GET /api/admin/routes?mapId=<mapId>  -> all routes (incl. pending/hidden)
 export async function GET(req: Request) {
@@ -16,7 +15,7 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {
@@ -49,7 +48,11 @@ export async function PATCH(req: Request) {
     const existing = await col.findOne(byIdFilter<Route>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Route not found", 404);
 
-    const perm = await canModerateMap(ctx, existing.mapId);
+    const need: "approve" | "moderate" =
+      moderation !== undefined && hidden === undefined && name === undefined && description === undefined
+        ? "approve"
+        : "moderate";
+    const perm = await canOnMap(ctx, existing.mapId, need);
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
     const set: Record<string, unknown> = {};
@@ -119,7 +122,7 @@ export async function DELETE(req: Request) {
     const existing = await col.findOne(byIdFilter<Route>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Route not found", 404);
 
-    const perm = await canModerateMap(ctx, existing.mapId);
+    const perm = await canOnMap(ctx, existing.mapId, "moderate");
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
     await col.deleteOne(byIdFilter<Route>(oid));

@@ -50,6 +50,12 @@ import {
 } from "@/lib/api-client";
 import type { Spot, Zone, Route, MapBan, MapContributorEntry } from "@/lib/types";
 import {
+  ALL_CAPABILITIES,
+  ROLE_CAPABILITIES,
+  type MapCapability,
+  type MapRoleType,
+} from "@/lib/roles";
+import {
   MARKER_PRESETS,
   MARKER_COLORS,
   DEFAULT_MARKER,
@@ -161,7 +167,7 @@ export function MarkerPicker({
   );
 }
 
-export function AdminPanel() {
+export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
   const { user } = useAuth();
   const [maps, setMaps] = useState<AdminMapEntry[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -198,6 +204,7 @@ export function AdminPanel() {
   const [moderators, setModerators] = useState<MapRoleEntry[]>([]);
   const [loadingModerators, setLoadingModerators] = useState(false);
   const [moderatorEmail, setModeratorEmail] = useState("");
+  const [moderatorRole, setModeratorRole] = useState<MapRoleType>("moderator");
   const [moderatorBusy, setModeratorBusy] = useState(false);
   const [moderatorError, setModeratorError] = useState("");
   const [moderatorNotice, setModeratorNotice] = useState("");
@@ -247,9 +254,15 @@ export function AdminPanel() {
       setIsAdmin(res.isAdmin);
       setLoadingMaps(false);
       if (res.maps.length > 0) {
-        setActiveMap((prev) =>
-          prev && res.maps.some((m) => m._id === prev._id) ? prev : res.maps[0]
-        );
+        setActiveMap((prev) => {
+          const requested =
+            prev && res.maps.some((m) => m._id === prev._id)
+              ? prev
+              : initialMapId
+                ? res.maps.find((m) => m._id === initialMapId) ?? res.maps[0]
+                : res.maps[0];
+          return requested;
+        });
       } else {
         setActiveMap(null);
       }
@@ -257,7 +270,7 @@ export function AdminPanel() {
       setMapsError("Could not load your maps. Are you a map owner?");
       setLoadingMaps(false);
     }
-  }, []);
+  }, [initialMapId]);
 
   useEffect(() => {
     if (!user) return;
@@ -269,8 +282,12 @@ export function AdminPanel() {
         setMaps(res.maps);
         setIsAdmin(res.isAdmin);
         setLoadingMaps(false);
-        if (res.maps.length > 0) setActiveMap(res.maps[0]);
-        else setActiveMap(null);
+        if (res.maps.length > 0) {
+          const target = initialMapId
+            ? res.maps.find((m) => m._id === initialMapId)
+            : undefined;
+          setActiveMap(target ?? res.maps[0]);
+        } else setActiveMap(null);
       })
       .catch(() => {
         if (!active) return;
@@ -280,7 +297,7 @@ export function AdminPanel() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, initialMapId]);
 
   const handleCreateMap = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -428,12 +445,27 @@ export function AdminPanel() {
   // the map: the map's owner or a global admin.
   const canManageMap = isAdmin || activeMap?.role === "owner";
 
+  // Capabilities derived from the caller's role on the active map. Owners and
+  // global admins have everything; viewers/reviewers/moderators get whatever
+  // their role grants (see lib/roles.ts).
+  const role = activeMap?.role;
+  const caps: readonly MapCapability[] =
+    isAdmin || role === "owner" || !role
+      ? ALL_CAPABILITIES
+      : ROLE_CAPABILITIES[role];
+  const canExport = caps.includes("export");
+  const canApprove = caps.includes("approve");
+  const canModerate = caps.includes("moderate");
+  const canStaff = caps.includes("staff");
+  const isReadOnlyTeamRole =
+    role !== undefined && role !== "owner" && role !== "moderator";
+
   const loadModerators = useCallback(async (mapId: string) => {
     setLoadingModerators(true);
     setModeratorError("");
     try {
       const res = await fetchMapModerators(mapId);
-      setModerators(res?.moderators ?? []);
+      setModerators(res?.members ?? []);
     } catch (e) {
       setModeratorError((e as Error).message || "Failed to load moderators.");
       setModerators([]);
@@ -469,10 +501,14 @@ export function AdminPanel() {
     setModeratorError("");
     setModeratorNotice("");
     try {
-      const res = await addMapModerator(activeMap._id, moderatorEmail.trim());
-      setModerators(res.moderators);
+      const res = await addMapModerator(
+        activeMap._id,
+        moderatorEmail.trim(),
+        moderatorRole
+      );
+      setModerators(res.members);
       setModeratorEmail("");
-      setModeratorNotice("Moderator added.");
+      setModeratorNotice("Team member added.");
     } catch (err) {
       setModeratorError((err as Error).message || "Failed to add moderator.");
     } finally {
@@ -871,9 +907,9 @@ export function AdminPanel() {
                     />
                     {m.title}
                   </span>
-                  {m.role === "moderator" && (
-                    <span className="admin-map-tab-chip">moderator</span>
-                  )}
+{m.role && m.role !== "owner" && (
+                        <span className="admin-map-tab-chip">{m.role}</span>
+                      )}
                   {m.spotPending > 0 && (
                     <span className="admin-map-tab-badge">{m.spotPending}</span>
                   )}
@@ -965,7 +1001,7 @@ export function AdminPanel() {
                       >
                         {copied ? "Copied!" : "Copy"}
                       </button>
-                      {backendLive && (
+                      {backendLive && canExport && (
                         <>
                           <button
                             type="button"
@@ -1206,6 +1242,8 @@ export function AdminSpotRow({
   onReject,
   onToggleHidden,
   onDestroy,
+  canApprove,
+  canModerate,
 }: {
   spot: Spot;
   map: AdminMapEntry;
@@ -1222,6 +1260,8 @@ export function AdminSpotRow({
   onReject: () => void;
   onToggleHidden: () => void;
   onDestroy: () => void;
+  canApprove?: boolean;
+  canModerate?: boolean;
 }) {
   const pending = spot.moderation === "pending";
 
@@ -1418,7 +1458,7 @@ export function AdminSpotRow({
       </div>
 
       <div className="admin-row-actions">
-        {pending && (
+        {pending && canApprove !== false && (
           <>
             <button type="button" className="action-btn" onClick={onApprove}>
               <IconCheck size={15} /> Approve
@@ -1428,19 +1468,23 @@ export function AdminSpotRow({
             </button>
           </>
         )}
-        <button type="button" className="action-btn2" onClick={() => onStartEdit(spot)}>
-          Edit
-        </button>
-        <button
-          type="button"
-          className="action-btn2"
-          onClick={onToggleHidden}
-        >
-          {spot.hidden ? "Restore" : "Hide"}
-        </button>
-        <button type="button" className="icon-btn danger" onClick={onDestroy} aria-label="Destroy spot">
-          <IconTrash size={16} />
-        </button>
+        {canModerate !== false && (
+          <>
+            <button type="button" className="action-btn2" onClick={() => onStartEdit(spot)}>
+              Edit
+            </button>
+            <button
+              type="button"
+              className="action-btn2"
+              onClick={onToggleHidden}
+            >
+              {spot.hidden ? "Restore" : "Hide"}
+            </button>
+            <button type="button" className="icon-btn danger" onClick={onDestroy} aria-label="Destroy spot">
+              <IconTrash size={16} />
+            </button>
+          </>
+        )}
       </div>
     </li>
   );

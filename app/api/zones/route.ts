@@ -1,6 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, isValidLatLng, publicContentFilter } from "@/lib/api";
-import { getAdminContext, getMap, isGlobalAdmin, isMapModerator } from "@/lib/admin";
+import { getAdminContext, getMap, isGlobalAdmin, isMapModerator, hasMapRole } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
 import { hasValidColor } from "@/lib/markers-data";
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     const allowed =
       isGlobalAdmin(ctx.userId) ||
       (map?.ownerId && map.ownerId === ctx.userId) ||
-      (await isMapModerator(mapId, ctx.userId));
+      (await hasMapRole(mapId, ctx.userId, ["reviewer", "moderator"]));
     if (!allowed) {
       return error(
         "Only the map owner and moderators can add zones to this map.",

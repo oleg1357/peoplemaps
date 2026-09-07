@@ -102,10 +102,12 @@ export function MapsHomePage({
   initialCenter,
   initialZoom,
   initialAdd,
+  initialSpotId,
 }: {
   initialCenter?: [number, number];
   initialZoom?: number;
   initialAdd?: boolean;
+  initialSpotId?: string | null;
 }) {
   const { theme } = useTheme();
   const [mapStyle, setMapStyle] = useState<MapStyle>("osm");
@@ -366,10 +368,21 @@ export function MapsHomePage({
     };
   }, [selected, spotPhotos]);
 
-  const openSpot = (spot: Spot) => {
+  const openSpot = useCallback((spot: Spot) => {
     setSelected(spot);
     flyTargetRef.current = [spot.lat, spot.lng];
-  };
+  }, []);
+
+  // Deep-link: `?spot=<id>` opens + flies to that spot once its data loads.
+  // (Spots arrive asynchronously, so wait until the target exists in the list.)
+  const initialSpotHandled = useRef(false);
+  useEffect(() => {
+    if (!initialSpotId || initialSpotHandled.current) return;
+    const target = spots.find((s) => s._id === initialSpotId);
+    if (!target) return;
+    initialSpotHandled.current = true;
+    openSpot(target);
+  }, [initialSpotId, spots, openSpot]);
 
   const handleSaveReview = async () => {
     if (!selected || !selected._id) return;

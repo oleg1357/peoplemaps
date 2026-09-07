@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
 import type { Spot, ModerationStatus } from "@/lib/types";
 
-// Admin-only routes for map management. Access is restricted to the owner of
-// the map's Sanity document, or any configured global admin.
+// Admin-only routes for map management. Access is restricted to the map owner,
+// configured global admins, and team members with the relevant capability:
+//   GET (list)                 -> "read"   (viewers + up)
+//   PATCH moderation/hidden    -> "approve" / "moderate"
+//   PATCH edit fields          -> "moderate"
+//   DELETE                     -> "moderate"
 
 // GET /api/admin/spots?mapId=<mapId>  -> all spots (incl. pending/hidden)
 export async function GET(req: Request) {
@@ -16,7 +20,7 @@ export async function GET(req: Request) {
   if (!mapId) return error("Missing mapId");
 
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {
@@ -65,7 +69,13 @@ export async function PATCH(req: Request) {
     const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Spot not found", 404);
 
-    const perm = await canModerateMap(ctx, existing.mapId);
+    // Approving/rejecting needs the "approve" capability; hiding and editing
+    // need "moderate". When both are present, the stricter one wins.
+    const need: "approve" | "moderate" =
+      moderation !== undefined && hidden === undefined && !fields
+        ? "approve"
+        : "moderate";
+    const perm = await canOnMap(ctx, existing.mapId, need);
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
     const set: Record<string, unknown> = {};
@@ -176,7 +186,7 @@ export async function DELETE(req: Request) {
     const existing = await col.findOne(byIdFilter<Spot>(oid), { projection: { mapId: 1, name: 1 } });
     if (!existing) return error("Spot not found", 404);
 
-    const perm = await canModerateMap(ctx, existing.mapId);
+    const perm = await canOnMap(ctx, existing.mapId, "moderate");
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
 await col.deleteOne(byIdFilter<Spot>(oid));

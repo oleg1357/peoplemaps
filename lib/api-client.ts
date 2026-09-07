@@ -40,6 +40,7 @@ import type {
   ModerationRule,
   MapContributorEntry,
 } from "./types";
+import type { MapRoleType } from "@/lib/roles";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
 // client bundle can decide which experience to render. The API route handlers
@@ -331,14 +332,18 @@ export interface AdminMapEntry extends MapDocument {
   spotTotal: number;
   spotPending: number;
   spotHidden: number;
-  role?: "owner" | "moderator"; // the caller's relationship to this map
+  // The caller's relationship to this map: "owner" or a team role
+  // (viewer/reviewer/moderator). Absent for maps read via other paths.
+  role?: "owner" | MapRoleType;
 }
 
-// A moderator is granted access to the admin UI for a map but only the "spots"
-// view (approve/reject/hide/edit/destroy). They cannot change settings.
+// A team member of a map. Roles gate which capabilities they get in the admin
+// UI (see lib/roles.ts): viewers are read-only, reviewers approve/reject,
+// moderators get full content control.
 export interface MapRoleEntry {
   _id: string;
   userId: string;
+  role?: MapRoleType; // absent = legacy moderator
   displayName?: string;
   email?: string;
   addedBy: string;
@@ -483,10 +488,10 @@ export async function destroySpot(spotId: string): Promise<void> {
   });
 }
 
-// ---- Map roles (moderators, owner-only) ----
+// ---- Map team roles (owner-only) ----
 export interface MapRolesResponse {
   mapId: string;
-  moderators: MapRoleEntry[];
+  members: MapRoleEntry[];
 }
 
 export async function fetchMapModerators(mapId: string): Promise<MapRolesResponse | null> {
@@ -496,11 +501,12 @@ export async function fetchMapModerators(mapId: string): Promise<MapRolesRespons
 
 export async function addMapModerator(
   mapId: string,
-  email: string
+  email: string,
+  role: MapRoleType = "moderator"
 ): Promise<MapRolesResponse> {
   return req<MapRolesResponse>("/api/admin/maps/roles", {
     method: "POST",
-    body: JSON.stringify({ mapId, email }),
+    body: JSON.stringify({ mapId, email, role }),
   });
 }
 

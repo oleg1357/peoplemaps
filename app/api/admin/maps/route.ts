@@ -1,7 +1,7 @@
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json } from "@/lib/api";
 import { NextResponse } from "next/server";
-import { getAdminContext, canManageMap, getMap } from "@/lib/admin";
+import { getAdminContext, canManageMap, getMap, getMapRoleType } from "@/lib/admin";
 import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { serverClient, writeClient } from "@/sanity/lib/client";
 import { getServerSupabase } from "@/lib/supabase-server";
@@ -12,6 +12,7 @@ import {
   sanitizeMarkerEmoji,
 } from "@/lib/markers-data";
 import type { MapDocument } from "@/lib/types";
+import type { MapRoleType } from "@/lib/roles";
 
 // GET /api/admin/maps  -> maps the caller may moderate.
 // Map owners see their own maps; global admins see every map (with spot counts).
@@ -38,8 +39,10 @@ export async function GET(req: Request) {
 
   const owned = isAdmin ? maps : maps.filter((m) => m.ownerId === ctx.userId);
 
-  // Moderators also get a "spots only" admin view of maps they don't own.
-  let moderatorMapIds: Set<string> = new Set();
+  // Team members (viewer/reviewer/moderator) also get an admin view of maps they
+  // don't own. Owners take precedence, so their own maps stay "owner" even if a
+  // stale role row exists.
+  const roleById = new Map<string, MapRoleType>();
   if (!isAdmin && ctx.userId) {
     try {
       const db = await getDb();
@@ -47,12 +50,13 @@ export async function GET(req: Request) {
         const roleCol = db.collection<import("@/lib/types").MapRole>(COLLECTIONS.mapRoles);
         const roles = await roleCol
           .find({ userId: ctx.userId })
-          .project({ mapId: 1 })
           .toArray();
-        moderatorMapIds = new Set(roles.map((r) => r.mapId));
+        for (const r of roles) {
+          roleById.set(r.mapId, r.role ?? "moderator");
+        }
       }
     } catch {
-      moderatorMapIds = new Set();
+      roleById.clear();
     }
   }
 
@@ -60,7 +64,9 @@ export async function GET(req: Request) {
     ? maps
     : [
         ...owned,
-        ...maps.filter((m) => moderatorMapIds.has(m._id) && m.ownerId !== ctx.userId),
+        ...maps.filter(
+          (m) => roleById.has(m._id) && m.ownerId !== ctx.userId
+        ),
       ];
 
   // Attach moderate-able maps + spot moderation counts. When Mongo is
@@ -104,8 +110,8 @@ export async function GET(req: Request) {
     withCounts = null;
   }
 
-  const roleFor = (m: MapDocument): "owner" | "moderator" =>
-    m.ownerId === ctx.userId ? "owner" : moderatorMapIds.has(m._id) ? "moderator" : "owner";
+  const roleFor = (m: MapDocument): "owner" | MapRoleType =>
+    m.ownerId === ctx.userId ? "owner" : roleById.get(m._id) ?? "owner";
 
   const result = (withCounts ?? viewable.map((m) => ({ ...m, spotTotal: 0, spotPending: 0, spotHidden: 0 }))).map(
     (m) => ({ ...m, role: roleFor(m) })

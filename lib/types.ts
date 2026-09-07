@@ -1,5 +1,7 @@
 // Shared types for the MongoDB-backed coordination + spots layer.
 
+import type { MapRoleType } from "@/lib/roles";
+
 export type SpotStatus = "open" | "closed" | "unknown";
 
 // Moderation state of a spot. New spots start as "pending" and must be
@@ -120,13 +122,15 @@ export interface ReviewVote {
   userId: string;
 }
 
-// A designated moderator of a map. One document per (mapId, userId) pair.
-// Moderators can review/edit/destroy spots but cannot change map settings,
-// manage other moderators, or delete the map itself.
+// A designated team member of a map. One document per (mapId, userId) pair.
+// Roles grant capabilities (see lib/roles.ts): viewers are read-only, reviewers
+// can approve/reject pending content, moderators get full content control.
+// Legacy rows without a `role` field behave as "moderator".
 export interface MapRole {
   _id?: string;
   mapId: string; // Sanity map document _id
-  userId: string; // Supabase user id of the moderator
+  userId: string; // Supabase user id of the team member
+  role?: MapRoleType; // viewer | reviewer | moderator
   displayName?: string; // human-readable name captured at assignment time
   addedBy: string; // Supabase user id of the owner who assigned them
   addedAt: string; // ISO timestamp

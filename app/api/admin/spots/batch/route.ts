@@ -1,9 +1,10 @@
 import { json, error, withDb, toObjectId } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import { COLLECTIONS } from "@/lib/mongodb";
 import type { Spot } from "@/lib/types";
 import type { Filter, ObjectId } from "mongodb";
+import type { MapCapability } from "@/lib/roles";
 
 const MAX_IDS = 500;
 
@@ -25,8 +26,13 @@ export async function POST(req: Request) {
     return error("Action must be approve, reject, hide or restore.");
   }
 
+  // Approving/rejecting the queue needs the "approve" capability; hiding and
+  // restoring content needs "moderate".
+  const need: MapCapability =
+    action === "approve" || action === "reject" ? "approve" : "moderate";
+
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, body.mapId);
+  const perm = await canOnMap(ctx, body.mapId, need);
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   const oids: ObjectId[] = [];

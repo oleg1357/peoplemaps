@@ -1,6 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import type { MapBan } from "@/lib/types";
 
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const mapId = searchParams.get("mapId");
   if (!mapId) return error("Missing mapId");
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in.", 401);
   const actorId = ctx.userId;
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "staff");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {
@@ -69,7 +69,7 @@ export async function DELETE(req: Request) {
   const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in.", 401);
   const actorId = ctx.userId;
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "staff");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {

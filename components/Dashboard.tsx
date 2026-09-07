@@ -9,9 +9,9 @@ import ProfilePanel from "./ProfilePanel";
 
 type DashboardTab = "profile" | "admin";
 
-export default function Dashboard() {
+export default function Dashboard({ initialMapId }: { initialMapId?: string | null }) {
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<DashboardTab>("profile");
+  const [tab, setTab] = useState<DashboardTab>(initialMapId ? "admin" : "profile");
 
   if (!user) {
     return (
@@ -68,7 +68,7 @@ export default function Dashboard() {
         </div>
 
         <div className="dash-body">
-          {tab === "profile" ? <ProfilePanel /> : <AdminPanel />}
+          {tab === "profile" ? <ProfilePanel /> : <AdminPanel initialMapId={initialMapId} />}
         </div>
       </div>
     </div>

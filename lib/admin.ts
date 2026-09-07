@@ -3,6 +3,11 @@ import { serverClient } from "@/sanity/lib/client";
 import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import type { MapDocument, MapRole } from "@/lib/types";
+import {
+  roleHasCapability,
+  type MapCapability,
+  type MapRoleType,
+} from "@/lib/roles";
 
 // Comma-separated Supabase user ids with global super-admin rights, e.g.
 // ADMIN_USER_IDS="uuid-1,uuid-2". These users can manage every map's spots.
@@ -96,15 +101,54 @@ export async function getMapBySlug(slug: string): Promise<MapDocument | null> {
   }
 }
 
-// True when the requesting user is allowed to moderate the given map. This is
-// the "moderator-level" permission: map owners, global admins and any user
-// designated as a moderator of this map may review/edit/destroy spots.
-export async function canModerateMap(
+// Returns the team-role document for a user on a map, or null.
+export async function getMapRole(
+  mapId: string,
+  userId: string
+): Promise<MapRole | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    return await db
+      .collection<MapRole>(COLLECTIONS.mapRoles)
+      .findOne({ mapId, userId });
+  } catch {
+    return null;
+  }
+}
+
+// The user's role on a map, or null when they have no team role. Legacy rows
+// (created before roles existed) default to "moderator".
+export async function getMapRoleType(
+  mapId: string,
+  userId: string
+): Promise<MapRoleType | null> {
+  const role = await getMapRole(mapId, userId);
+  if (!role) return null;
+  return role.role ?? "moderator";
+}
+
+// True when the user has a team role in the given set on the map. Used by the
+// public submission paths ("invitedOnly" collaboration, auto-approval).
+export async function hasMapRole(
+  mapId: string,
+  userId: string,
+  roles: MapRoleType[]
+): Promise<boolean> {
+  const type = await getMapRoleType(mapId, userId);
+  return Boolean(type && roles.includes(type));
+}
+
+// Capability check (the core of the IAM model). Owners and global admins have
+// every capability; team members get whatever their role grants. Callers pass
+// the specific capability they need rather than a blanket "moderator" check.
+export async function canOnMap(
   ctx: AdminContext,
-  mapId: string
+  mapId: string,
+  capability: MapCapability
 ): Promise<{ ok: boolean; reason?: string }> {
   if (!ctx.userId) {
-    return { ok: false, reason: "You must be signed in to manage spots." };
+    return { ok: false, reason: "You must be signed in." };
   }
   if (ctx.isGlobalAdmin) return { ok: true };
 
@@ -112,14 +156,26 @@ export async function canModerateMap(
   if (!map) {
     return { ok: false, reason: "Map not found." };
   }
-
   if (map.ownerId === ctx.userId) return { ok: true };
 
-  // Fall back to a designated moderator role (stored in Mongo).
-  const isModerator = await isMapModerator(mapId, ctx.userId);
-  if (isModerator) return { ok: true };
+  if (capability === "manage") {
+    return { ok: false, reason: "Only the map owner can do that." };
+  }
 
-  return { ok: false, reason: "You don't have permission to manage this map." };
+  const role = await getMapRoleType(mapId, ctx.userId);
+  if (role && roleHasCapability(role, capability)) return { ok: true };
+
+  return { ok: false, reason: "You don't have permission to do that on this map." };
+}
+
+// True when the requesting user is allowed to perform full content moderation
+// (edit/hide/destroy) on the given map: owners, global admins and moderators.
+// Reviewers (approve/reject only) and viewers (read-only) do not pass.
+export async function canModerateMap(
+  ctx: AdminContext,
+  mapId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  return canOnMap(ctx, mapId, "moderate");
 }
 
 // True only for the map's owner or a global admin — the "manage" level that can
@@ -142,24 +198,17 @@ export async function canManageMap(
   return { ok: false, reason: "Only the map owner can do that." };
 }
 
-// Whether the given user has a moderator role for the given map.
+// Whether the given user has the "moderator" team role for the given map.
+// (Legacy role rows without an explicit role field count as moderators.)
 export async function isMapModerator(
   mapId: string,
   userId: string
 ): Promise<boolean> {
-  try {
-    const db = await getDb();
-    if (!db) return false;
-    const role = await db
-      .collection<MapRole>(COLLECTIONS.mapRoles)
-      .findOne({ mapId, userId });
-    return Boolean(role);
-  } catch {
-    return false;
-  }
+  const role = await getMapRole(mapId, userId);
+  return Boolean(role && (role.role ?? "moderator") === "moderator");
 }
 
-// Moderator entries for a map (used by owners to manage their team).
+// Team-role entries for a map (used by owners to manage their team).
 export async function getMapModerators(mapId: string): Promise<MapRole[]> {
   try {
     const db = await getDb();

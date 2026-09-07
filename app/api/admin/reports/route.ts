@@ -1,6 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
-import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { getAdminContext, canOnMap } from "@/lib/admin";
 import { logActivity } from "@/lib/activity";
 import type { SpotReport } from "@/lib/types";
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const rawStatus = searchParams.get("status") || "open";
   const status: "open" | "resolved" = rawStatus === "resolved" ? "resolved" : "open";
   const ctx = await getAdminContext(req);
-  const perm = await canModerateMap(ctx, mapId);
+  const perm = await canOnMap(ctx, mapId, "read");
   if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
   return withDb(async (db) => {
@@ -41,7 +41,7 @@ export async function PATCH(req: Request) {
     if (!report) return error("Report not found", 404);
     const ctx = await getAdminContext(req);
     if (!ctx.userId) return error("You must be signed in.", 401);
-    const perm = await canModerateMap(ctx, report.mapId);
+    const perm = await canOnMap(ctx, report.mapId, "staff");
     if (!perm.ok) return error(perm.reason || "Forbidden", 403);
 
     await col.updateOne(

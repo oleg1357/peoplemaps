@@ -20,12 +20,17 @@ import {
   IconThumbsUp,
 } from "@/components/icons";
 
-function mapHref(map: { mapSlug?: string | null; mapId?: string } | null) {
-  return map?.mapSlug
-    ? `/map/${encodeURIComponent(map.mapSlug)}`
-    : map?.mapId
-      ? `/map?map=${encodeURIComponent(map.mapId)}`
-      : "/map";
+function mapHref(map: { mapSlug?: string | null; mapId?: string; spot?: string } | null) {
+  if (map?.mapSlug) {
+    return map?.spot
+      ? `/map/${encodeURIComponent(map.mapSlug)}?spot=${encodeURIComponent(map.spot)}`
+      : `/map/${encodeURIComponent(map.mapSlug)}`;
+  }
+  if (map?.mapId) {
+    const spot = map?.spot ? `&spot=${encodeURIComponent(map.spot)}` : "";
+    return `/map?map=${encodeURIComponent(map.mapId)}${spot}`;
+  }
+  return "/map";
 }
 
 function formatDay(iso: string | null): string {
@@ -149,7 +154,11 @@ export default function ProfilePanel() {
                         >
                           <IconLink size={14} /> Copy
                         </a>
-                        <Link href="/dashboard" className="link-btn" prefetch={false}>
+                        <Link
+                          href={`/dashboard?map=${encodeURIComponent(m._id)}`}
+                          className="link-btn"
+                          prefetch={false}
+                        >
                           Manage
                         </Link>
                       </div>
@@ -254,7 +263,7 @@ function SpotContributions({ data }: { data: ProfileData }) {
             <div className="profile-row-date muted">
               {formatDay(s.createdAt)}
             </div>
-            <Link href={mapHref({ mapSlug: s.mapSlug })} className="link-btn" prefetch={false}>
+            <Link href={mapHref({ mapSlug: s.mapSlug, spot: s._id })} className="link-btn" prefetch={false}>
               View
             </Link>
           </li>
@@ -282,7 +291,7 @@ function ReviewContributions({ data }: { data: ProfileData }) {
           <div className="profile-row-body">
             <div className="profile-row-title">
               <a
-                href={mapHref({ mapSlug: r.mapSlug, mapId: r.mapId })}
+                href={mapHref({ mapSlug: r.mapSlug, mapId: r.mapId, spot: r.spotId })}
                 className="profile-row-name link"
               >
                 {r.spotName}
@@ -352,7 +361,7 @@ function PhotoContributions({ data }: { data: ProfileData }) {
         {photos.map((p) => (
           <Link
             key={p._id}
-            href={mapHref({ mapSlug: p.mapSlug, mapId: p.mapId })}
+            href={mapHref({ mapSlug: p.mapSlug, mapId: p.mapId, spot: p.spotId })}
             className="profile-photo"
             prefetch={false}
           >

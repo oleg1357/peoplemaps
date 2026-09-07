@@ -16,6 +16,7 @@ const MapsHomePage = dynamic(
 //                        via the admin fetch, so shared `?map=` permalinks
 //                        for slug-less maps still work)
 //   ?lat=&lng=&zoom=  -> initial map view (already served on /map/[slug])
+//   ?spot=<spotId>    -> open + fly to a specific spot (profile deep-links)
 function ParamsBridge({
   initialCenter,
   initialZoom,
@@ -35,6 +36,7 @@ function ParamsBridge({
     Number.isFinite(lat) &&
     Number.isFinite(lng);
   const add = searchParams.get("add") === "1";
+  const spotParam = searchParams.get("spot");
 
   // Select/register the deep-linked map. Public maps are already in the list;
   // private or just-created maps require an auth fetch and then get registered
@@ -69,6 +71,7 @@ function ParamsBridge({
         Number.isFinite(zoom) && zoom > 0 ? zoom : initialZoom
       }
       initialAdd={add}
+      initialSpotId={spotParam}
     />
   );
 }
