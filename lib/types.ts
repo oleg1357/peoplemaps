@@ -175,6 +175,11 @@ export interface MapDocument {
   allowPhotos?: boolean | null;
   collaborationMode?: "anyone" | "loggedIn" | "invitedOnly" | null;
   enableClustering?: boolean | null;
+  // Choropleth overlay settings. `choroplethRamp` picks the color scale used
+  // to fill valued zones; `choroplethMetric` selects what auto-averages from
+  // the spots inside a zone when the zone has no explicit `value`.
+  choroplethRamp?: "sequential" | "diverging" | null;
+  choroplethMetric?: "priceLevel" | "rating" | null;
   // Discovery: primary category + comma-separated tag keywords.
   category?: string | null;
   tags?: string | null;

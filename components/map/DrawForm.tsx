@@ -11,6 +11,11 @@ interface DrawFormProps {
   setDrawDesc: (v: string) => void;
   drawColor: string;
   setDrawColor: (v: string) => void;
+  // Optional choropleth value + trust count (zones only).
+  drawValue: string;
+  setDrawValue: (v: string) => void;
+  drawCount: string;
+  setDrawCount: (v: string) => void;
   drawError: string;
   handleUndoPoint: () => void;
   handleRedoPoint: () => void;
@@ -29,12 +34,17 @@ export function DrawForm({
   setDrawDesc,
   drawColor,
   setDrawColor,
+  drawValue,
+  setDrawValue,
+  drawCount,
+  setDrawCount,
   drawError,
   handleUndoPoint,
   handleRedoPoint,
   cancelDraw,
   saveDraw,
 }: DrawFormProps) {
+  const isZone = drawMode === "zone";
   return (
     <form
       onSubmit={(e) => {
@@ -45,7 +55,7 @@ export function DrawForm({
     >
       <strong>{drawMode === "zone" ? "Add zone" : "Add route"}</strong>
       <span className="draw-desc">
-        {drawMode === "zone"
+        {isZone
           ? `Click the map to place corners — ${drawPoints.length} placed, need at least 3.`
           : `Click the map to place points — ${drawPoints.length} placed, need at least 2.`}
       </span>
@@ -70,6 +80,34 @@ export function DrawForm({
         onChange={(e) => setDrawDesc(e.target.value)}
         placeholder="Description (optional)"
       />
+      {isZone && (
+        <div className="map-draw-value-row">
+          <div className="map-draw-value">
+            <span className="color-label">Value</span>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={drawValue}
+              onChange={(e) => setDrawValue(e.target.value)}
+              placeholder="e.g. 1500"
+              title="Numeric value shown in the choropleth overlay (optional)"
+            />
+          </div>
+          <div className="map-draw-value">
+            <span className="color-label">Count</span>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={drawCount}
+              onChange={(e) => setDrawCount(e.target.value)}
+              placeholder="reports"
+              title="How many submissions back this value (trust signal)"
+            />
+          </div>
+        </div>
+      )}
       <div className="map-draw-color">
         <span className="color-label">Color</span>
         <input

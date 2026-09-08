@@ -12,8 +12,20 @@ import { tileLayer } from "@/lib/tiles";
 import type { MapStyle } from "@/lib/tiles";
 import type { Spot, SpotStatus } from "@/lib/types";
 import type { Zone } from "@/lib/types";
-import { valueToColor, DEFAULT_RAMP } from "@/lib/choropleth";
-import { polylineLength, polygonArea, formatDistance, formatArea } from "@/lib/geo";
+import {
+  valueToColor,
+  RAMP_BY_NAME,
+  type ChoroplethRampName,
+} from "@/lib/choropleth";
+import {
+  polylineLength,
+  polygonArea,
+  formatDistance,
+  formatArea,
+  aggregateZoneValues,
+  segmentMidpoint,
+  haversineDistance,
+} from "@/lib/geo";
 import {
   addReview,
   updateReview,
@@ -47,6 +59,8 @@ import { SpotDetailPanel, type SpotDetailBundle } from "./map/SpotDetailPanel";
 import { MapToolbar } from "./map/MapToolbar";
 import { Legend } from "./map/Legend";
 import { MeasureCard } from "./map/MeasureCard";
+import { LayerPanel } from "./map/LayerPanel";
+import { HeatOverlay } from "./map/HeatOverlay";
 import { AddSpotForm } from "./map/AddSpotForm";
 import { DrawForm } from "./map/DrawForm";
 
@@ -179,6 +193,8 @@ export function MapsHomePage({
   const [drawName, setDrawName] = useState("");
   const [drawDesc, setDrawDesc] = useState("");
   const [drawColor, setDrawColor] = useState<string>(DEFAULT_MARKER.color);
+  const [drawValue, setDrawValue] = useState("");
+  const [drawCount, setDrawCount] = useState("");
   const [drawError, setDrawError] = useState("");
   // Map search & layer filters.
   const [searchQuery, setSearchQuery] = useState("");
@@ -188,12 +204,17 @@ export function MapsHomePage({
   // Choropleth: when on, zones with a numeric `value` are filled by value
   // color instead of their own `color`, and a legend is shown.
   const [choropleth, setChoropleth] = useState(true);
+  // Layer panel + heatmap overlay.
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [heatmap, setHeatmap] = useState(false);
   // Measurement mode: click points on the map to read distance (2+ points) or
   // area (3+ points). Transient — nothing is persisted.
   const [measureMode, setMeasureMode] = useState<"distance" | "area" | null>(null);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
   const [measureUndo, setMeasureUndo] = useState<[number, number][][]>([]);
   const [measureRedo, setMeasureRedo] = useState<[number, number][][]>([]);
+  const [measureUnits, setMeasureUnits] = useState<"metric" | "imperial">("metric");
+  const [measureHover, setMeasureHover] = useState<[number, number] | null>(null);
   // Tag & rating filters (public map). Tag filter selects spots carrying a tag;
   // rating filter shows only spots meeting a minimum average review score.
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -292,18 +313,74 @@ export function MapsHomePage({
           return avg !== undefined && avg >= minRating;
         })
       : tagFiltered;
-  const visibleSpots = showSpots ? ratingFiltered : [];
+  const visibleSpots = useMemo(
+    () => (showSpots ? ratingFiltered : []),
+    [showSpots, ratingFiltered]
+  );
   const visibleZones = showZones ? zones : [];
   const visibleRoutes = showRoutes ? routes : [];
 
-  // Choropleth overlay: zones that carry a numeric `value`. Their fill is
-  // derived from a shared [min, max] range rather than a per-zone color.
-  const valuedZones = useMemo(() => zones.filter((z) => Number.isFinite(z.value)), [zones]);
-  const hasChoroplethData = valuedZones.length > 0;
+  // Choropleth overlay: zones are filled by a numeric `value` mapped onto a
+  // color ramp. Values can be set manually (`zone.value`) or auto-derived from
+  // the spots inside each zone (`aggregateZoneValues`), controlled by the map's
+  // `choroplethMetric`. The ramp can be switched live (per-map default or a
+  // local override via the layer panel).
+  const CHOROPLETH_METRIC: "priceLevel" | "rating" =
+    activeMap?.choroplethMetric === "rating" ? "rating" : "priceLevel";
+  const [choroplethRampName, setChoroplethRampName] = useState<ChoroplethRampName>(
+    activeMap?.choroplethRamp === "diverging" ? "diverging" : "sequential"
+  );
+  // Synchronize the ramp selector when switching maps (Sanity settings are the
+  // source of truth until the user overrides them).
+  useEffect(() => {
+    setChoroplethRampName(activeMap?.choroplethRamp === "diverging" ? "diverging" : "sequential");
+  }, [activeMap?._id, activeMap?.choroplethRamp]);
+  const choroplethRamp = RAMP_BY_NAME[choroplethRampName];
+
+  // Augment zones with auto-computed values so the overlay stays meaningful
+  // even before anyone hand-enters numbers. Explicit `value` always wins.
+  const zoneStats = useMemo(
+    () => aggregateZoneValues(zones, spots, avgBySpot, CHOROPLETH_METRIC),
+    [zones, spots, avgBySpot, CHOROPLETH_METRIC]
+  );
+  const valuedZones = useMemo(() => {
+    const explicit = new Set(zones.filter((z) => Number.isFinite(z.value)));
+    return zones.map((z) => {
+      if (explicit.has(z)) return z;
+      const stats = zoneStats.get(z._id ?? "");
+      if (!stats) return z;
+      return { ...z, value: stats.value, valueCount: stats.count };
+    });
+  }, [zones, zoneStats]);
+  const hasChoroplethData = valuedZones.some((z) => Number.isFinite(z.value));
+  // Heatmap is usable once any visible spot carries a price level or rating.
+  const heatmapReady = showSpots && spots.some((s) => {
+    const pl = s.priceLevel ?? 0;
+    return pl >= 1 || (avgBySpot.get(s._id ?? "") ?? 0) > 0;
+  });
+  // Intensity points for the heat layer — same metric as the choropleth.
+  const heatPoints = useMemo(() => {
+    if (!heatmapReady) return [];
+    const denom = CHOROPLETH_METRIC === "rating" ? 5 : 4;
+    return visibleSpots
+      .map((s) => {
+        const raw =
+          CHOROPLETH_METRIC === "rating"
+            ? (avgBySpot.get(s._id ?? "") ?? 0)
+            : (s.priceLevel ?? 0);
+        return { pos: [s.lat, s.lng] as [number, number], v: Math.max(0, Math.min(1, raw / denom)) };
+      })
+      .filter((d) => d.v > 0);
+  }, [heatmapReady, visibleSpots, avgBySpot, CHOROPLETH_METRIC]);
+  const chloroplethValued = useMemo(
+    () => valuedZones.filter((z) => Number.isFinite(z.value)),
+    [valuedZones]
+  );
   const choroplethRange = useMemo(() => {
     let lo = Infinity;
     let hi = -Infinity;
     for (const z of valuedZones) {
+      if (!Number.isFinite(z.value)) continue;
       if ((z.value ?? NaN) < lo) lo = z.value!;
       if ((z.value ?? NaN) > hi) hi = z.value!;
     }
@@ -313,11 +390,11 @@ export function MapsHomePage({
   const zoneFillColor = useCallback(
     (z: Zone): string => {
       if (choropleth && choroplethRange && Number.isFinite(z.value)) {
-        return valueToColor(z.value!, choroplethRange.min, choroplethRange.max, DEFAULT_RAMP);
+        return valueToColor(z.value!, choroplethRange.min, choroplethRange.max, choroplethRamp);
       }
       return z.color || activeMap?.accentColor || DEFAULT_MARKER.color;
     },
-    [choropleth, choroplethRange, activeMap?.accentColor]
+    [choropleth, choroplethRange, choroplethRamp, activeMap?.accentColor]
   );
 
   // The most common tags on this map, capped so the chip row stays compact.
@@ -621,6 +698,8 @@ export function MapsHomePage({
     setDrawError("");
     setDrawName("");
     setDrawDesc("");
+    setDrawValue("");
+    setDrawCount("");
     setDrawPoints((pts) => (drawMode === mode ? [] : pts));
     setDrawUndo([]);
     setDrawRedo([]);
@@ -639,6 +718,8 @@ export function MapsHomePage({
     setDrawRedo([]);
     setDrawName("");
     setDrawDesc("");
+    setDrawValue("");
+    setDrawCount("");
     setDrawError("");
   };
 
@@ -686,6 +767,7 @@ export function MapsHomePage({
     setMeasurePoints([]);
     setMeasureUndo([]);
     setMeasureRedo([]);
+    setMeasureHover(null);
   };
 
   const handleMeasurePlace = (p: [number, number]) => {
@@ -712,17 +794,73 @@ export function MapsHomePage({
     setMeasureRedo((redoStack) => redoStack.slice(0, -1));
   };
 
+  const onMeasureHover = useCallback((p: [number, number] | null) => {
+    setMeasureHover(p);
+  }, []);
+
   // Live measurement readout for the current mode.
   const measureResult = useMemo(() => {
     if (!measureMode || measurePoints.length < 2) return null;
     if (measureMode === "distance") {
-      return formatDistance(polylineLength(measurePoints));
+      return formatDistance(polylineLength(measurePoints), measureUnits);
     }
     if (measureMode === "area" && measurePoints.length >= 3) {
-      return formatArea(polygonArea(measurePoints));
+      return formatArea(polygonArea(measurePoints), measureUnits);
     }
     return null;
-  }, [measureMode, measurePoints]);
+  }, [measureMode, measurePoints, measureUnits]);
+
+  // Per-segment labels for the distance mode (each segment's length at its
+  // midpoint), plus a live total line to the cursor.
+  const measureSegments = useMemo(() => {
+    if (measureMode !== "distance" || measurePoints.length < 2) return [];
+    const segs: { midpoint: [number, number]; label: string }[] = [];
+    for (let i = 1; i < measurePoints.length; i++) {
+      segs.push({
+        midpoint: segmentMidpoint(measurePoints[i - 1], measurePoints[i]),
+        label: formatDistance(
+          haversineDistance(measurePoints[i - 1], measurePoints[i]),
+          measureUnits
+        ),
+      });
+    }
+    return segs;
+  }, [measureMode, measurePoints, measureUnits]);
+
+  // Persisting a finished measurement: distance → route, area → zone. Does a
+  // light validation mirroring saveDraw and reuses the map's drawing color.
+  const saveMeasurement = async (type: "zone" | "route") => {
+    const label = type === "zone" ? "Measured area" : "Measured path";
+    if (!activeMap) return;
+    if (!canContribute) {
+      setDrawError("You must be signed in to save a " + type + ".");
+      return;
+    }
+    try {
+      if (type === "zone") {
+        await addZone({
+          mapId: activeMap._id,
+          name: label,
+          shape: "polygon",
+          points: measurePoints,
+          color: activeMap.accentColor ?? DEFAULT_MARKER.color,
+          description: "Created from a map measurement.",
+        });
+      } else {
+        await addRoute({
+          mapId: activeMap._id,
+          name: label,
+          points: measurePoints,
+          color: activeMap.accentColor ?? DEFAULT_MARKER.color,
+          description: "Created from a map measurement.",
+        });
+      }
+      cancelMeasure();
+    } catch (err) {
+      console.error("saveMeasurement failed:", err);
+      setDrawError((err as Error).message || `Could not save ${type}.`);
+    }
+  };
 
   const saveDraw = async (type: "zone" | "route") => {
     setDrawError("");
@@ -750,6 +888,8 @@ export function MapsHomePage({
     }
     try {
       if (type === "zone") {
+        const valueNum = drawValue.trim() === "" ? null : Number(drawValue);
+        const countNum = drawCount.trim() === "" ? null : Math.round(Number(drawCount));
         await addZone({
           mapId: activeMap._id,
           name,
@@ -757,6 +897,18 @@ export function MapsHomePage({
           points: drawPoints,
           color: drawColor,
           description: drawDesc.trim() || null,
+          value:
+            valueNum !== null && Number.isFinite(valueNum)
+              ? valueNum
+              : null,
+          valueCount:
+            countNum !== null && Number.isFinite(countNum) && countNum >= 0
+              ? countNum
+              : null,
+          valueUpdatedAt:
+            valueNum !== null && Number.isFinite(valueNum)
+              ? new Date().toISOString()
+              : null,
         });
       } else {
         await addRoute({
@@ -1010,21 +1162,35 @@ export function MapsHomePage({
       <MapToolbar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        showSpots={showSpots}
-        setShowSpots={setShowSpots}
-        showZones={showZones}
-        setShowZones={setShowZones}
-        showRoutes={showRoutes}
-        setShowRoutes={setShowRoutes}
-        choropleth={choropleth}
-        setChoropleth={setChoropleth}
-        hasChoroplethData={hasChoroplethData}
+        layersOpen={layersOpen}
+        onToggleLayers={() => setLayersOpen((v) => !v)}
         mapStyle={mapStyle}
         setMapStyle={setMapStyle}
         onCenterOnMe={centerOnMe}
         onCopyView={copyViewLink}
         viewCopied={viewCopied}
       />
+
+      {layersOpen && (
+        <LayerPanel
+          showSpots={showSpots}
+          setShowSpots={setShowSpots}
+          showZones={showZones}
+          setShowZones={setShowZones}
+          showRoutes={showRoutes}
+          setShowRoutes={setShowRoutes}
+          choropleth={choropleth}
+          setChoropleth={setChoropleth}
+          hasChoroplethData={hasChoroplethData}
+          heatmap={heatmap}
+          setHeatmap={setHeatmap}
+          heatmapReady={heatmapReady}
+          rampName={choroplethRampName}
+          setRampName={setChoroplethRampName}
+          metric={CHOROPLETH_METRIC}
+          onClose={() => setLayersOpen(false)}
+        />
+      )}
 
       {(topTags.length > 0 || minRating > 0 || tagFilter) && (
         <div className="map-filter-bar">
@@ -1142,6 +1308,7 @@ export function MapsHomePage({
           subdomains={tiles.subdomains}
           maxZoom={tiles.maxZoom}
         />
+        {heatmap && heatPoints.length > 0 && <HeatOverlay points={heatPoints} />}
         {adding && (
           <MapClickHandler onPlace={(p) => setDraft(p)} />
         )}
@@ -1366,21 +1533,67 @@ export function MapsHomePage({
             }}
           />
         ))}
+        {measureSegments.map((seg, i) => (
+          <CircleMarker
+            key={`seg-${i}`}
+            center={seg.midpoint}
+            radius={4}
+            pathOptions={{
+              color: "#C99A5B",
+              weight: 1,
+              fillColor: "#fff",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip permanent direction="top" offset={[0, -10]} className="measure-live-tip">
+              <span className="measure-live-label">{seg.label}</span>
+            </Tooltip>
+          </CircleMarker>
+        ))}
+        {measureMode &&
+          measureHover &&
+          measurePoints.length >= 1 && (
+            <Polyline
+              positions={[measurePoints[measurePoints.length - 1], measureHover]}
+              pathOptions={{ color: "#C99A5B", weight: 2, dashArray: "4 4", opacity: 0.5 }}
+            >
+              <Tooltip permanent direction="top" offset={[0, -12]} className="measure-live-tip">
+                <span className="measure-live-label">
+                  {formatDistance(
+                    haversineDistance(measurePoints[measurePoints.length - 1], measureHover),
+                    measureUnits
+                  )}
+                </span>
+              </Tooltip>
+            </Polyline>
+          )}
+        {measureMode === "area" &&
+          measureHover &&
+          measurePoints.length >= 3 && (
+            <Polyline
+              positions={[measureHover, measurePoints[0]]}
+              pathOptions={{ color: "#C99A5B", weight: 2, dashArray: "4 4", opacity: 0.5 }}
+            />
+          )}
         {userLocation && !adding && (
           <Marker position={userLocation} icon={userIcon} />
         )}
         <ViewWatcher onMove={onMapMove} />
         <FlyTo center={flyTargetRef.current} />
         <FlyToView target={viewTargetRef.current} />
+        {measureMode && (
+          <MapHoverHandler onHover={onMeasureHover} />
+        )}
       </MapContainer>
 
-      {choropleth && choroplethRange && valuedZones.length > 0 && (
+      {choropleth && choroplethRange && chloroplethValued.length > 0 && (
         <div className="choropleth-legend-wrap">
           <Legend
-            title="Zone value"
+            title={CHOROPLETH_METRIC === "rating" ? "Avg rating" : "Price level"}
             min={choroplethRange.min}
             max={choroplethRange.max}
-            footnote={`${valuedZones.length} zone${valuedZones.length === 1 ? "" : "s"} with values`}
+            ramp={choroplethRamp}
+            footnote={`${chloroplethValued.length} zone${chloroplethValued.length === 1 ? "" : "s"} with data`}
           />
         </div>
       )}
@@ -1393,6 +1606,15 @@ export function MapsHomePage({
             result={measureResult}
             canUndo={measureUndo.length > 0}
             canRedo={measureRedo.length > 0}
+            units={measureUnits}
+            setUnits={setMeasureUnits}
+            canSave={Boolean(
+              canContribute &&
+                activeMap &&
+                measurePoints.length >= (measureMode === "area" ? 3 : 2)
+            )}
+            onSaveAsZone={() => saveMeasurement("zone")}
+            onSaveAsRoute={() => saveMeasurement("route")}
             onUndo={handleMeasureUndo}
             onRedo={handleMeasureRedo}
             onClear={() => setMeasurePoints([])}
@@ -1436,6 +1658,10 @@ export function MapsHomePage({
           setDrawDesc={setDrawDesc}
           drawColor={drawColor}
           setDrawColor={setDrawColor}
+          drawValue={drawValue}
+          setDrawValue={setDrawValue}
+          drawCount={drawCount}
+          setDrawCount={setDrawCount}
           drawError={drawError}
           handleUndoPoint={handleUndoPoint}
           handleRedoPoint={handleRedoPoint}
@@ -1458,5 +1684,20 @@ function MapClickHandler({ onPlace }: { onPlace: (latlng: [number, number]) => v
       map.off("click", handler);
     };
   }, [map, onPlace]);
+  return null;
+}
+
+function MapHoverHandler({ onHover }: { onHover: (latlng: [number, number] | null) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const move = (e: L.LeafletMouseEvent) => onHover([e.latlng.lat, e.latlng.lng]);
+    const out = () => onHover(null);
+    map.on("mousemove", move);
+    map.on("mouseout", out);
+    return () => {
+      map.off("mousemove", move);
+      map.off("mouseout", out);
+    };
+  }, [map, onHover]);
   return null;
 }

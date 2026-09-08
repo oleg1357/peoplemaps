@@ -48,6 +48,8 @@ export const DEMO_MAPS: MapDocument[] = [
     allowPhotos: true,
     collaborationMode: "anyone",
     enableClustering: false,
+    choroplethRamp: "sequential",
+    choroplethMetric: "priceLevel",
     category: "shopping",
     tags: "groceries, supermarkets, discount",
   },

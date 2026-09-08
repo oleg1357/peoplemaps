@@ -195,6 +195,36 @@ export const map = defineType({
       initialValue: false,
     }),
     defineField({
+      name: "choroplethRamp",
+      title: "Choropleth color ramp",
+      description:
+        "Color scale used to fill valued zones. 'Sequential' goes cool (low) to warm (high); 'Diverging' goes red (low) to green (high).",
+      type: "string",
+      options: {
+        list: [
+          { title: "Sequential (blue → amber → red)", value: "sequential" },
+          { title: "Diverging (red → amber → green)", value: "diverging" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "sequential",
+    }),
+    defineField({
+      name: "choroplethMetric",
+      title: "Choropleth value source",
+      description:
+        "When zones have no manually-set value, this field determines what is auto-computed from the spots inside each zone.",
+      type: "string",
+      options: {
+        list: [
+          { title: "Average spot price level", value: "priceLevel" },
+          { title: "Average spot rating (reviews)", value: "rating" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "priceLevel",
+    }),
+    defineField({
       name: "category",
       title: "Category",
       description: "Primary category used for home-page filtering and discovery.",

@@ -7,16 +7,17 @@ export interface ColorStop {
   color: string; // hex
 }
 
-// Sequential green → yellow → red. Good for "lower is better" values like rent
-// or price. The neutral (white) end makes zones with no/unknown value stand out.
-export const RAMP_YELLOW_GREEN_RED: ColorStop[] = [
+// Sequential blue → amber → red. Good for "lower is better" values like rent
+// or price. Cool end = cheap/calm, warm end = expensive/busy.
+export const RAMP_SEQUENTIAL: ColorStop[] = [
   { offset: 0, color: "#4BB0E8" }, // low value (blue = calm / cheap)
   { offset: 0.5, color: "#F0AD00" }, // mid value (amber)
   { offset: 1, color: "#E8796F" }, // high value (red = expensive / busy)
 ];
 
-// Reversed ramp for "higher is better" values (e.g. ratings).
-export const RAMP_GREEN_RED: ColorStop[] = [
+// Diverging red → amber → green. Reading direction matches the old
+// RAMP_YELLOW_GREEN_RED name; "higher is better" values (e.g. ratings).
+export const RAMP_DIVERGING: ColorStop[] = [
   { offset: 0, color: "#E8796F" }, // low (red)
   { offset: 0.5, color: "#F0AD00" }, // mid (amber)
   { offset: 1, color: "#61C67A" }, // high (green)
@@ -24,8 +25,29 @@ export const RAMP_GREEN_RED: ColorStop[] = [
 
 export type ColorRamp = ColorStop[];
 
+export type ChoroplethRampName = "sequential" | "diverging";
+
+// Map-name → actual ramp. Defaults to sequential (matches map/legend defaults).
+export const RAMP_BY_NAME: Record<ChoroplethRampName, ColorRamp> = {
+  sequential: RAMP_SEQUENTIAL,
+  diverging: RAMP_DIVERGING,
+};
+
+export const RAMPS: { name: ChoroplethRampName; label: string; ramp: ColorRamp }[] = [
+  { name: "sequential", label: "Sequential (cool → warm)", ramp: RAMP_SEQUENTIAL },
+  { name: "diverging", label: "Diverging (red → green)", ramp: RAMP_DIVERGING },
+];
+
+// Backwards-compatible alias.
+export const RAMP_YELLOW_GREEN_RED: ColorRamp = RAMP_SEQUENTIAL;
+export const RAMP_GREEN_RED: ColorRamp = RAMP_DIVERGING;
+
 // Which ramp to show by default for a given zone's values.
-export const DEFAULT_RAMP: ColorRamp = RAMP_YELLOW_GREEN_RED;
+export const DEFAULT_RAMP: ColorRamp = RAMP_SEQUENTIAL;
+
+export function rampByName(name: string | null | undefined): ColorRamp {
+  return name === "diverging" ? RAMP_DIVERGING : RAMP_SEQUENTIAL;
+}
 
 // Interpolate a single hex color. Returns "#rrggbb".
 function lerpHex(a: string, b: string, t: number): string {

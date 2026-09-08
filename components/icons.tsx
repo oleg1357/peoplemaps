@@ -245,3 +245,13 @@ export function IconRuler({ size = 20, color = "currentColor" }: IconProps) {
     </svg>
   );
 }
+
+export function IconLayers({ size = 20, color = "currentColor" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill={color}>
+      <polygon points="10,2 18,6.5 10,11 2,6.5" />
+      <polygon points="2,10 10,14.5 18,10 18,12 10,16.5 2,12" opacity="0.85" />
+      <polygon points="2,14 10,18.5 18,14" opacity="0.6" />
+    </svg>
+  );
+}

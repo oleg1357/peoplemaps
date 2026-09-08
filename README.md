@@ -24,8 +24,9 @@ Both modes share the same UI components; the `backendLive` flag in `lib/api-clie
 - Add new spots, search by name/city/street/tags, and pick a marker icon and colour
 - Community tools: rate and review, comment on reviews, upload photos, and vote on "helpful" reviews
 - Collaborative maps with zones (polygons/circles) and routes (polylines) drawn on the map
-- Choropleth zone overlay: color-encode zones by a numeric value (rent/price/rating) with a legend, trust counts and freshness
-- Measurement tools: click-to-measure distance and area straight on the map (transient, nothing saved)
+- Choropleth zone overlay: color-encode zones by a numeric value (rent/price/rating) with a legend, trust counts and freshness. Zone values auto-aggregate from the spots inside each zone (or from a hand-entered value in the draw form), and the metric + color ramp are per-map settings
+- Layer panel: independent toggles for spots / zones / routes, the choropleth overlay with a live ramp picker, and a value heatmap (canvas via `leaflet.heat`, grid fallback)
+- Measurement tools: click-to-measure distance and area straight on the map (transient, nothing saved) with segment labels, a follow-mouse preview, metric/imperial units, and "save as zone/route"
 - Per-map configuration: category + tags for discovery, collaboration modes (anyone / logged-in / owner & moderators only), clustering, welcome message and add-spot instructions, contact/website links
 - Moderation: map owners and moderators can approve, reject, hide or destroy spots, zones and routes; report and ban systems; an activity/audit log
 - Cover images per map, permalink slugs and a public profile / "my contributions" page

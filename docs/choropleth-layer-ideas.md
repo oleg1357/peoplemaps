@@ -1,8 +1,8 @@
 # Choropleth layer ideas (saved for later)
 
-**Status: mostly implemented** — see the checklist below. The core data model,
-color ramp, legend and map rendering are done in demo + backend modes. Remaining
-gaps are listed at the end.
+**Status: implemented** — auto-aggregated zone values, map-level ramp settings,
+value capture in the draw form, a real layer panel and a heatmap layer have all
+landed since. The remaining follow-ups are admin UI surfaces (below).
 
 **Source inspiration:** Reddit r/copenhagen post — "Made a map of what rent
 actually costs in every [neighborhood] in Copenhagen"
@@ -28,19 +28,36 @@ onto a color ramp.
 
 - **Zone data model** (`lib/types.ts`): optional `value`, `valueCount` and
   `valueUpdatedAt` fields on `Zone`.
-- **Color ramp utility** (`lib/choropleth.ts`): `valueToColor()`, two ramps
-  (yellow-green-red default + green-red), `rampGradient()`, `legendTicks()`
-  and `formatCompact()`.
+- **Color ramp utility** (`lib/choropleth.ts`): `valueToColor()`, two named
+  ramps (`sequential` blue→amber→red, `diverging` red→amber→green),
+  `RAMP_BY_NAME`, `rampGradient()`, `legendTicks()` and `formatCompact()`.
 - **Legend component** (`components/map/Legend.tsx`): floating legend bar with
-  title, gradient, min/max labels and a trust footnote.
+  title, gradient, min/max labels and a trust footnote; takes the active ramp.
 - **Map rendering** (`components/MapsHomePage.tsx`): valued zones are filled by
   `value` color (opacity raised to 0.5, border matches), tooltips show the
   value, and a legend appears when choropleth is on and data is available.
-- **Toolbar toggle** (`components/map/MapToolbar.tsx`): a "Choropleth" checkbox
-  that disables itself when no zone has a value.
+- **Auto-aggregation** (`lib/geo.ts`): `aggregateZoneValues()` computes the zone
+  value from the spots inside it (`pointInPolygon` / `pointInCircle`); explicit
+  `zone.value` always wins. The metric (`priceLevel` | `rating`) is a per-map
+  setting (`MapDocument.choroplethMetric`).
+- **Map-level ramp setting** (`MapDocument.choroplethRamp`, Sanity schema +
+  queries + demo seed): served from Sanity, overridable live in the layer panel.
+- **Layer panel** (`components/map/LayerPanel.tsx`): spots / zones / routes
+  toggles, choropleth toggle with a ramp picker, and a heatmap toggle —
+  replaces the MapToolbar checkboxes.
+- **Heatmap** (`components/map/HeatOverlay.tsx`): canvas heat via `leaflet.heat`
+  (lazy-loaded so SSR never touches it), with a grid-density circle fallback.
+- **Toolbar** (`components/map/MapToolbar.tsx`): a "Layers" button opens the
+  layer panel; the choropleth checkbox moved into the panel.
+- **Value capture** (`components/map/DrawForm.tsx`): the zone draw form collects
+  an optional numeric `value` + report count, persisted by `saveDraw`.
+- **Measurement polish**: per-segment distance labels, a follow-mouse preview
+  with live total, metric/imperial units, and "save as zone/route" from the
+  measure card.
 - **API** (`app/api/zones/route.ts`): sanitises optional `value` / `valueCount` /
   `valueUpdatedAt` on zone creation.
-- **Demo seed** (`lib/demo-data.ts`): two valued zones + a shared range.
+- **Demo seed** (`lib/demo-data.ts`): two valued zones + a shared range + map
+  ramp/metric settings.
 
 ## Proposed pieces (from earlier layer discussion)
 
@@ -63,10 +80,8 @@ onto a color ramp.
 
 ## Remaining gaps / follow-ups
 
-- A dedicated color-ramp/legend subtype in the layer panel (the current legend
-  is title + gradient; a per-map default ramp selector is not yet exposed).
-- Per-zone value capture UI (the draw form does not yet collect a numeric
-  value; values are set via the API/demo seed).
-- Map-level default ramp setting (`MapDocument` has no ramp field yet).
 - Admin zone moderation views do not yet surface the new `value*` fields.
+- The per-map ramp/metric settings are not editable from the admin "edit map"
+  form (they are set in Sanity today), and new zones drawn on the map inherit
+  no auto-value until the next aggregation pass.
 

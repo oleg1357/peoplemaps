@@ -978,6 +978,27 @@
   font-size: 13px;
 }
 
+.map-draw-value-row {
+  display: flex;
+  gap: 8px;
+}
+.map-draw-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.map-draw-value .color-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.map-draw-value input[type="number"] {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font);
+}
+
 .draw-error {
   color: var(--danger);
   font-size: 12.5px;
@@ -2318,6 +2339,101 @@
   cursor: not-allowed;
 }
 
+/* ---------- Layers panel ---------- */
+.layer-panel {
+  position: absolute;
+  z-index: 2000;
+  top: calc(var(--header-h) + 54px);
+  right: 12px;
+  width: 208px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font);
+}
+.layer-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.layer-panel-top strong {
+  font-size: 14px;
+}
+.layer-panel-top .close-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(19, 27, 35, 0.06);
+  border: none;
+  border-radius: 0;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  cursor: pointer;
+  padding: 3px 0;
+}
+.layer-row input {
+  cursor: pointer;
+  accent-color: var(--green-dark);
+}
+.layer-row-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.layer-row-disabled input {
+  cursor: not-allowed;
+}
+.layer-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.ramp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 0 3px 2px;
+}
+.ramp-options {
+  display: flex;
+  gap: 8px;
+}
+.ramp-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  border-radius: 0;
+}
+.ramp-btn.active {
+  border-color: var(--green-dark);
+  box-shadow: 0 0 0 1px var(--green-dark);
+}
+.ramp-swatch {
+  width: 46px;
+  height: 12px;
+  display: inline-block;
+}
+.ramp-label {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 .choropleth-legend-wrap {
   position: absolute;
   z-index: 9998;
@@ -2430,5 +2546,65 @@
 }
 .measure-actions .link-btn {
   font-size: 12px;
+}
+.measure-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.measure-units {
+  display: flex;
+  gap: 4px;
+}
+.measure-units .unit-btn {
+  font-size: 11px;
+  font-family: var(--font);
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 0;
+}
+.measure-units .unit-btn.active {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  color: #fff;
+}
+.save-meas-btn {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  padding: 4px 12px;
+  cursor: pointer;
+  border: 1px solid var(--green-dark);
+  background: var(--green-dark);
+  color: #fff;
+  border-radius: 0;
+}
+.save-meas-btn:hover {
+  opacity: 0.9;
+}
+.measure-more-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.measure-live-label {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #C99A5B;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.leaflet-tooltip.measure-live-tip {
+  background: #C99A5B;
+  border-color: #C99A5B;
+  color: #fff;
+}
+.leaflet-tooltip.measure-live-tip::before {
+  border-top-color: #C99A5B;
 }
 

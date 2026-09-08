@@ -29,6 +29,8 @@ export const MAP_FIELDS = `,
   allowPhotos,
   collaborationMode,
   enableClustering,
+  choroplethRamp,
+  choroplethMetric,
   category,
   tags`;
 

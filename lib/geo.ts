@@ -58,14 +58,30 @@ export function polygonArea(points: LatLng[]): number {
     : 0;
 }
 
-// Human-readable distance: meters under 1 km, then kilometers with 1 decimal.
-export function formatDistance(meters: number): string {
+// Human-readable distance. Metric shows meters/kilometers; imperial shows
+// feet/miles (Feet under 1000 ft, else miles with 1 decimal).
+export type Units = "metric" | "imperial";
+
+export function formatDistance(meters: number, units: Units = "metric"): string {
+  if (units === "imperial") {
+    const feet = meters * 3.28084;
+    if (feet < 1000) return `${Math.round(feet)} ft`;
+    return `${(feet / 5280).toFixed(2)} mi`;
+  }
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-// Human-readable area: m² under 10 000, then hectares (ha), then km².
-export function formatArea(squareMeters: number): string {
+// Human-readable area. Metric shows m²/hectares/km²; imperial shows ft²/acres.
+export function formatArea(
+  squareMeters: number,
+  units: Units = "metric"
+): string {
+  if (units === "imperial") {
+    const sqFt = squareMeters * 10.76391;
+    if (sqFt < 43_560) return `${Math.round(sqFt)} ft²`;
+    return `${(sqFt / 43_560).toFixed(2)} ac`;
+  }
   if (squareMeters < 10_000) {
     return `${Math.round(squareMeters)} m²`;
   }
@@ -73,4 +89,127 @@ export function formatArea(squareMeters: number): string {
     return `${(squareMeters / 10_000).toFixed(2)} ha`;
   }
   return `${(squareMeters / 1_000_000).toFixed(2)} km²`;
+}
+
+// Midpoint (simple average) between two points — good for placing segment
+// labels on the map.
+export function segmentMidpoint(a: LatLng, b: LatLng): LatLng {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+}
+
+// ---- Point containment (for auto-aggregating zone values from spots) ----
+
+// Ray-casting point-in-polygon test on [lat, lng] vertices (assumes the
+// polygon edges follow latitude/longitude — fine at map scale).
+export function pointInPolygon(
+  point: LatLng,
+  polygon: LatLng[]
+): boolean {
+  const [lat, lng] = point;
+  let inside = false;
+  let j = polygon.length - 1;
+  for (let i = 0; i < polygon.length; i++) {
+    const [latI, lngI] = polygon[i];
+    const [latJ, lngJ] = polygon[j];
+    const intersect =
+      lngI > lng !== lngJ > lng &&
+      lat < ((latJ - latI) * (lng - lngI)) / (lngJ - lngI || 1e-12) + latI;
+    if (intersect) inside = !inside;
+    j = i;
+  }
+  return inside;
+}
+
+// Point inside a [lat, lng] center + radius-in-meters circle.
+export function pointInCircle(
+  point: LatLng,
+  center: LatLng,
+  radiusM: number
+): boolean {
+  return haversineDistance(point, center) <= radiusM;
+}
+
+// Whether a spot-like point falls inside a zone (polygon via `points` or
+// circle via `center`+`radius`). Zone shape is inferred from the same fields
+// the renderer uses, so this stays consistent with what's drawn on the map.
+export function latLngInZone(
+  point: LatLng,
+  zone: { points?: LatLng[]; center?: LatLng; radius?: number }
+): boolean {
+  if (zone.center && typeof zone.radius === "number" && zone.radius > 0) {
+    return pointInCircle(point, zone.center, zone.radius);
+  }
+  if (zone.points && zone.points.length >= 3) {
+    return pointInPolygon(point, zone.points);
+  }
+  return false;
+}
+
+// ---- Auto-aggregation (zone value + trust count from contained spots) ----
+
+export type ChoroplethMetric = "priceLevel" | "rating";
+
+// For every zone, count the spots inside it and average the chosen metric:
+//  - "priceLevel": averages the spot's `priceLevel` (0-3 where present).
+//  - "rating": averages the average review score per spot (from `reviewScores`,
+//    a pre-built spotId → average-score map).
+// Zones without any contributing spot get no value (undefined), so the map
+// shows them in the neutral/missing color rather than inventing a signal.
+// Returns Map<zoneId, { value: number; count: number }>.
+interface ZoneGeometry {
+  _id?: string;
+  points?: LatLng[];
+  center?: LatLng;
+  radius?: number;
+}
+
+export function aggregateZoneValues(
+  zones: ZoneGeometry[],
+  spots: { _id?: string; lat: number; lng: number; priceLevel?: number | null }[],
+  reviewScores: Map<string, number>,
+  metric: ChoroplethMetric
+): Map<string, { value: number; count: number }> {
+  const out = new Map<string, { value: number; count: number }>();
+  for (const zone of zones) {
+    if (!zone._id) continue;
+    let sum = 0;
+    let count = 0;
+    for (const spot of spots) {
+      const pt: LatLng = [spot.lat, spot.lng];
+      if (!latLngInZone(pt, zone)) continue;
+      if (metric === "priceLevel") {
+        if (typeof spot.priceLevel === "number" && Number.isFinite(spot.priceLevel)) {
+          sum += spot.priceLevel;
+          count += 1;
+        }
+      } else {
+        const avg = reviewScores.get(spot._id ?? "");
+        if (typeof avg === "number" && Number.isFinite(avg)) {
+          sum += avg;
+          count += 1;
+        }
+      }
+    }
+    if (count > 0) out.set(zone._id, { value: sum / count, count });
+  }
+  return out;
+}
+
+// Averaged review score per spot, for the "rating" metric.
+export function averageReviewScoreBySpot(
+  reviews: { spotId: string; score: number }[]
+): Map<string, number> {
+  const sums = new Map<string, { total: number; count: number }>();
+  for (const r of reviews) {
+    if (!Number.isFinite(r.score)) continue;
+    const cur = sums.get(r.spotId) ?? { total: 0, count: 0 };
+    cur.total += r.score;
+    cur.count += 1;
+    sums.set(r.spotId, cur);
+  }
+  const out = new Map<string, number>();
+  for (const [id, v] of sums) {
+    if (v.count > 0) out.set(id, v.total / v.count);
+  }
+  return out;
 }
