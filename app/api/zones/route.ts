@@ -57,6 +57,24 @@ export async function POST(req: Request) {
       ? body.color
       : null;
 
+  // Choropleth: optional numeric value + trust signals. Sanitised so the map
+  // renderer only ever sees a finite number.
+  let value: number | null = null;
+  if (body.value !== undefined && body.value !== null) {
+    const parsed = typeof body.value === "number" ? body.value : Number(body.value);
+    if (Number.isFinite(parsed)) value = parsed;
+  }
+  let valueCount: number | null = null;
+  if (body.valueCount !== undefined && body.valueCount !== null) {
+    const parsed =
+      typeof body.valueCount === "number" ? body.valueCount : Number(body.valueCount);
+    if (Number.isInteger(parsed) && parsed >= 0) valueCount = parsed;
+  }
+  const valueUpdatedAt =
+    typeof body.valueUpdatedAt === "string" && body.valueUpdatedAt
+      ? body.valueUpdatedAt.slice(0, 40)
+      : null;
+
   const shape = body.shape;
   let points: [number, number][] | undefined;
   let center: [number, number] | undefined;
@@ -133,6 +151,9 @@ export async function POST(req: Request) {
     center,
     radius,
     color,
+    value,
+    valueCount,
+    valueUpdatedAt,
     description,
     createdBy: userId,
     createdAt: new Date().toISOString(),

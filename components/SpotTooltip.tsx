@@ -13,6 +13,7 @@ interface SpotTooltipProps {
   priceLevel?: number | null;
   tags?: string[];
   tip?: string | null;
+  extra?: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -56,6 +57,7 @@ export function SpotTooltip({
   priceLevel,
   tags,
   tip,
+  extra,
 }: SpotTooltipProps) {
   const statusKey =
     status === "open" || status === "closed" || status === "unknown"
@@ -107,6 +109,8 @@ export function SpotTooltip({
           {tip && <span className="spot-tip-insider">💡 {tip}</span>}
         </div>
       ) : null}
+
+      {extra && <span className="spot-tip-extra">{extra}</span>}
 
       <div className="spot-tip-foot">
         <IconMapMarker size={11} />

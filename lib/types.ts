@@ -93,6 +93,13 @@ export interface Zone {
   center?: GeoPoint; // circle center (lat,lng)
   radius?: number; // circle radius in meters
   color?: string | null; // hex fill/stroke color
+  // Choropleth: numeric value mapped onto a color ramp. When set, the zone is
+  // filled with a value-derived color instead of `color` (see lib/choropleth).
+  value?: number | null;
+  // Trust signals for choropleth overlays: how many submissions contributed to
+  // `value`, and when the value was last updated.
+  valueCount?: number | null;
+  valueUpdatedAt?: string | null;
   description?: string | null;
   createdBy?: string | null; // supabase user id
   createdAt: string;

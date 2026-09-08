@@ -231,3 +231,17 @@ export function IconThumbsUp({ size = 20, color = "currentColor" }: IconProps) {
     </svg>
   );
 }
+
+export function IconRuler({ size = 20, color = "currentColor" }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill={color}>
+      <rect x="1.5" y="5" width="17" height="10" rx="1.5" />
+      <path
+        d="M4.5 5v6 M7.5 5v6 M10.5 5v6 M13.5 5v6 M16.5 5v6"
+        stroke="var(--surface, #fff)"
+        strokeWidth="1.4"
+        fill="none"
+      />
+    </svg>
+  );
+}

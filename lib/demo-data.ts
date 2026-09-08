@@ -223,6 +223,11 @@ export const DEMO_ZONES: Zone[] = [
     center: [55.6939, 12.5461],
     radius: 600,
     color: "#61C67A",
+    // Choropleth demo: average price level (1 = cheap, 3 = expensive) plus a
+    // trust count + freshness so the legend/footnote has something to show.
+    value: 1.4,
+    valueCount: 12,
+    valueUpdatedAt: "2025-06-10T09:00:00.000Z",
     description: "The densest cluster of cheap supermarkets in the area.",
     createdBy: "1",
     createdAt: "2025-06-10T09:00:00.000Z",
@@ -241,6 +246,9 @@ export const DEMO_ZONES: Zone[] = [
       [55.6857, 12.5552],
     ],
     color: "#4BB0E8",
+    value: 2.6,
+    valueCount: 23,
+    valueUpdatedAt: "2025-07-01T09:00:00.000Z",
     description: "Best connected green spaces for a longer walk.",
     createdBy: "3",
     createdAt: "2025-06-15T09:00:00.000Z",
@@ -248,6 +256,10 @@ export const DEMO_ZONES: Zone[] = [
     hidden: false,
   },
 ];
+
+// Choropleth data range for the demo overlay (min/max across valued zones).
+export const DEMO_CHOROPLETH_MIN = 1;
+export const DEMO_CHOROPLETH_MAX = 3;
 
 export const DEMO_ROUTES: Route[] = [
   {

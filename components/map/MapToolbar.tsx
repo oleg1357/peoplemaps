@@ -13,6 +13,9 @@ interface MapToolbarProps {
   setShowZones: (v: boolean) => void;
   showRoutes: boolean;
   setShowRoutes: (v: boolean) => void;
+  choropleth: boolean;
+  setChoropleth: (v: boolean) => void;
+  hasChoroplethData: boolean;
   mapStyle: MapStyle;
   setMapStyle: (v: MapStyle) => void;
   onCenterOnMe: () => void;
@@ -29,6 +32,9 @@ export function MapToolbar({
   setShowZones,
   showRoutes,
   setShowRoutes,
+  choropleth,
+  setChoropleth,
+  hasChoroplethData,
   mapStyle,
   setMapStyle,
   onCenterOnMe,
@@ -57,6 +63,22 @@ export function MapToolbar({
       <label className="layer-toggle" title="Toggle routes">
         <input type="checkbox" checked={showRoutes} onChange={(e) => setShowRoutes(e.target.checked)} />
         Routes
+      </label>
+      <label
+        className={`layer-toggle ${hasChoroplethData ? "" : "layer-toggle-disabled"}`}
+        title={
+          hasChoroplethData
+            ? "Color zones by value"
+            : "Zones have no numeric values to color by"
+        }
+      >
+        <input
+          type="checkbox"
+          checked={choropleth}
+          disabled={!hasChoroplethData}
+          onChange={(e) => setChoropleth(e.target.checked)}
+        />
+        Choropleth
       </label>
       <select
         id="map-style-select"

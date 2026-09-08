@@ -11,6 +11,9 @@ import { useMapData } from "@/lib/MapContext";
 import { tileLayer } from "@/lib/tiles";
 import type { MapStyle } from "@/lib/tiles";
 import type { Spot, SpotStatus } from "@/lib/types";
+import type { Zone } from "@/lib/types";
+import { valueToColor, DEFAULT_RAMP } from "@/lib/choropleth";
+import { polylineLength, polygonArea, formatDistance, formatArea } from "@/lib/geo";
 import {
   addReview,
   updateReview,
@@ -39,9 +42,11 @@ import {
   makeMarkerDivIcon,
 } from "@/lib/markers";
 import { SpotTooltip } from "./SpotTooltip";
-import { IconLink } from "./icons";
+import { IconLink, IconRuler } from "./icons";
 import { SpotDetailPanel, type SpotDetailBundle } from "./map/SpotDetailPanel";
 import { MapToolbar } from "./map/MapToolbar";
+import { Legend } from "./map/Legend";
+import { MeasureCard } from "./map/MeasureCard";
 import { AddSpotForm } from "./map/AddSpotForm";
 import { DrawForm } from "./map/DrawForm";
 
@@ -180,6 +185,15 @@ export function MapsHomePage({
   const [showSpots, setShowSpots] = useState(true);
   const [showZones, setShowZones] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
+  // Choropleth: when on, zones with a numeric `value` are filled by value
+  // color instead of their own `color`, and a legend is shown.
+  const [choropleth, setChoropleth] = useState(true);
+  // Measurement mode: click points on the map to read distance (2+ points) or
+  // area (3+ points). Transient — nothing is persisted.
+  const [measureMode, setMeasureMode] = useState<"distance" | "area" | null>(null);
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
+  const [measureUndo, setMeasureUndo] = useState<[number, number][][]>([]);
+  const [measureRedo, setMeasureRedo] = useState<[number, number][][]>([]);
   // Tag & rating filters (public map). Tag filter selects spots carrying a tag;
   // rating filter shows only spots meeting a minimum average review score.
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -197,6 +211,10 @@ export function MapsHomePage({
     setDrawName("");
     setDrawDesc("");
     setDrawError("");
+    setMeasureMode(null);
+    setMeasurePoints([]);
+    setMeasureUndo([]);
+    setMeasureRedo([]);
     setAdding(false);
     setDraft(null);
     // Fly to the map's configured base center/zoom when switching maps.
@@ -277,6 +295,30 @@ export function MapsHomePage({
   const visibleSpots = showSpots ? ratingFiltered : [];
   const visibleZones = showZones ? zones : [];
   const visibleRoutes = showRoutes ? routes : [];
+
+  // Choropleth overlay: zones that carry a numeric `value`. Their fill is
+  // derived from a shared [min, max] range rather than a per-zone color.
+  const valuedZones = useMemo(() => zones.filter((z) => Number.isFinite(z.value)), [zones]);
+  const hasChoroplethData = valuedZones.length > 0;
+  const choroplethRange = useMemo(() => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const z of valuedZones) {
+      if ((z.value ?? NaN) < lo) lo = z.value!;
+      if ((z.value ?? NaN) > hi) hi = z.value!;
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+    return lo === hi ? { min: lo - 0.5, max: hi + 0.5 } : { min: lo, max: hi };
+  }, [valuedZones]);
+  const zoneFillColor = useCallback(
+    (z: Zone): string => {
+      if (choropleth && choroplethRange && Number.isFinite(z.value)) {
+        return valueToColor(z.value!, choroplethRange.min, choroplethRange.max, DEFAULT_RAMP);
+      }
+      return z.color || activeMap?.accentColor || DEFAULT_MARKER.color;
+    },
+    [choropleth, choroplethRange, activeMap?.accentColor]
+  );
 
   // The most common tags on this map, capped so the chip row stays compact.
   const topTags = useMemo(() => {
@@ -582,6 +624,11 @@ export function MapsHomePage({
     setDrawPoints((pts) => (drawMode === mode ? [] : pts));
     setDrawUndo([]);
     setDrawRedo([]);
+    // Measuring is excluded while drawing.
+    setMeasureMode(null);
+    setMeasurePoints([]);
+    setMeasureUndo([]);
+    setMeasureRedo([]);
     setDrawMode((m) => (m === mode ? null : mode));
   };
 
@@ -618,6 +665,64 @@ export function MapsHomePage({
     setDrawPoints(next);
     setDrawRedo((redoStack) => redoStack.slice(0, -1));
   };
+
+  // ---- Measurement mode ----
+
+  const startMeasure = (mode: "distance" | "area") => {
+    // Measuring is mutually exclusive with drawing and spot-adding.
+    setAdding(false);
+    setDraft(null);
+    setDrawMode(null);
+    setDrawPoints([]);
+    setDrawError("");
+    setMeasurePoints([]);
+    setMeasureUndo([]);
+    setMeasureRedo([]);
+    setMeasureMode((m) => (m === mode ? null : mode));
+  };
+
+  const cancelMeasure = () => {
+    setMeasureMode(null);
+    setMeasurePoints([]);
+    setMeasureUndo([]);
+    setMeasureRedo([]);
+  };
+
+  const handleMeasurePlace = (p: [number, number]) => {
+    setMeasurePoints((pts) => {
+      setMeasureUndo((u) => [...u, pts]);
+      setMeasureRedo([]);
+      return [...pts, p];
+    });
+  };
+
+  const handleMeasureUndo = () => {
+    if (measureUndo.length === 0) return;
+    const previous = measureUndo[measureUndo.length - 1];
+    setMeasureRedo((redoStack) => [...redoStack, measurePoints]);
+    setMeasurePoints(previous);
+    setMeasureUndo((undoStack) => undoStack.slice(0, -1));
+  };
+
+  const handleMeasureRedo = () => {
+    if (measureRedo.length === 0) return;
+    const next = measureRedo[measureRedo.length - 1];
+    setMeasureUndo((undoStack) => [...undoStack, measurePoints]);
+    setMeasurePoints(next);
+    setMeasureRedo((redoStack) => redoStack.slice(0, -1));
+  };
+
+  // Live measurement readout for the current mode.
+  const measureResult = useMemo(() => {
+    if (!measureMode || measurePoints.length < 2) return null;
+    if (measureMode === "distance") {
+      return formatDistance(polylineLength(measurePoints));
+    }
+    if (measureMode === "area" && measurePoints.length >= 3) {
+      return formatArea(polygonArea(measurePoints));
+    }
+    return null;
+  }, [measureMode, measurePoints]);
 
   const saveDraw = async (type: "zone" | "route") => {
     setDrawError("");
@@ -776,7 +881,7 @@ export function MapsHomePage({
   };
 
   return (
-    <div className={`map-container ${drawMode ? "drawing" : ""}`}>
+    <div className={`map-container ${drawMode || measureMode ? "drawing" : ""}`}>
       {maps.length > 0 && (
         <div id="map-buttons" className="buttons" style={{ top: "calc(var(--header-h) + 6px)" }}>
           <select
@@ -817,6 +922,7 @@ export function MapsHomePage({
         onClick={() => {
           setAddError("");
           cancelDraw();
+          cancelMeasure();
           if (!canContribute) {
             setAddError("You must be signed in to add a spot.");
             return;
@@ -848,6 +954,33 @@ export function MapsHomePage({
         title={maps.length === 0 ? "Create a map first (Map Admin) to add routes" : "Draw a route (path) on the map"}
       >
         {drawMode === "route" ? "✕ Cancel" : "Add route"}
+      </button>
+
+      <button
+        id="measure-distance-fab"
+        type="button"
+        className={`draw-fab measure-fab ${measureMode === "distance" ? "cancel" : ""}`}
+        onClick={() => startMeasure("distance")}
+        title="Measure distance between points"
+      >
+        {measureMode === "distance" ? (
+          "✕ Cancel"
+        ) : (
+          <>
+            <IconRuler size={15} />
+            Measure distance
+          </>
+        )}
+      </button>
+
+      <button
+        id="measure-area-fab"
+        type="button"
+        className={`draw-fab measure-fab ${measureMode === "area" ? "cancel" : ""}`}
+        onClick={() => startMeasure("area")}
+        title="Measure the area of a drawn shape"
+      >
+        {measureMode === "area" ? "✕ Cancel" : "Measure area"}
       </button>
 
       {maps.length === 0 && !adding && (
@@ -883,6 +1016,9 @@ export function MapsHomePage({
         setShowZones={setShowZones}
         showRoutes={showRoutes}
         setShowRoutes={setShowRoutes}
+        choropleth={choropleth}
+        setChoropleth={setChoropleth}
+        hasChoroplethData={hasChoroplethData}
         mapStyle={mapStyle}
         setMapStyle={setMapStyle}
         onCenterOnMe={centerOnMe}
@@ -1012,23 +1148,32 @@ export function MapsHomePage({
         {drawMode && (
           <MapClickHandler onPlace={handleDrawPlace} />
         )}
+        {measureMode && (
+          <MapClickHandler onPlace={handleMeasurePlace} />
+        )}
         {/* Zones: filled polygons or radius circles */}
-        {visibleZones.map((z) =>
-          z.shape === "circle" && z.center && z.radius ? (
+        {visibleZones.map((z) => {
+          const fill = zoneFillColor(z);
+          const isValued = choropleth && Number.isFinite(z.value);
+          return z.shape === "circle" && z.center && z.radius ? (
             <Circle
               key={z._id}
               center={z.center}
               radius={z.radius}
               pathOptions={{
-                color: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
-                fillColor: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
-                fillOpacity: 0.15,
-                weight: 2,
+                color: isValued ? fill : z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillColor: fill,
+                fillOpacity: isValued ? 0.5 : 0.15,
+                weight: isValued ? 2 : 2,
               }}
             >
               {(z.name || z.description) && (
                 <Tooltip direction="top" offset={[0, -12]}>
-                  <SpotTooltip name={z.name || "Zone"} hint={z.description || undefined} />
+                  <SpotTooltip
+                    name={z.name || "Zone"}
+                    hint={z.description || undefined}
+                    extra={isValued && typeof z.value === "number" ? `Value: ${z.value}` : undefined}
+                  />
                 </Tooltip>
               )}
             </Circle>
@@ -1037,20 +1182,24 @@ export function MapsHomePage({
               key={z._id}
               positions={z.points}
               pathOptions={{
-                color: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
-                fillColor: z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
-                fillOpacity: 0.15,
+                color: isValued ? fill : z.color || activeMap?.accentColor || DEFAULT_MARKER.color,
+                fillColor: fill,
+                fillOpacity: isValued ? 0.5 : 0.15,
                 weight: 2,
               }}
             >
               {(z.name || z.description) && (
                 <Tooltip direction="top" offset={[0, -12]}>
-                  <SpotTooltip name={z.name || "Zone"} hint={z.description || undefined} />
+                  <SpotTooltip
+                    name={z.name || "Zone"}
+                    hint={z.description || undefined}
+                    extra={isValued && typeof z.value === "number" ? `Value: ${z.value}` : undefined}
+                  />
                 </Tooltip>
               )}
             </Polygon>
-          ) : null
-        )}
+          ) : null;
+        })}
         {/* Routes: polylines */}
         {visibleRoutes.map((r) =>
           r.points && r.points.length >= 2 ? (
@@ -1180,6 +1329,43 @@ export function MapsHomePage({
             }}
           />
         ))}
+        {/* Measurement preview */}
+        {measureMode === "distance" && measurePoints.length >= 2 && (
+          <Polyline
+            positions={measurePoints}
+            pathOptions={{ color: "#C99A5B", weight: 3, opacity: 0.85 }}
+          />
+        )}
+        {measureMode === "area" && measurePoints.length >= 2 && (
+          <Polyline
+            positions={measurePoints}
+            pathOptions={{ color: "#C99A5B", weight: 2, dashArray: "6 4", opacity: 0.7 }}
+          />
+        )}
+        {measureMode === "area" && measurePoints.length >= 3 && (
+          <Polygon
+            positions={[...measurePoints, measurePoints[0]]}
+            pathOptions={{
+              color: "#C99A5B",
+              weight: 2,
+              fillColor: "#C99A5B",
+              fillOpacity: 0.18,
+            }}
+          />
+        )}
+        {measurePoints.map((p, i) => (
+          <CircleMarker
+            key={i}
+            center={p}
+            radius={5}
+            pathOptions={{
+              color: "#fff",
+              weight: 2,
+              fillColor: "#C99A5B",
+              fillOpacity: 1,
+            }}
+          />
+        ))}
         {userLocation && !adding && (
           <Marker position={userLocation} icon={userIcon} />
         )}
@@ -1187,6 +1373,33 @@ export function MapsHomePage({
         <FlyTo center={flyTargetRef.current} />
         <FlyToView target={viewTargetRef.current} />
       </MapContainer>
+
+      {choropleth && choroplethRange && valuedZones.length > 0 && (
+        <div className="choropleth-legend-wrap">
+          <Legend
+            title="Zone value"
+            min={choroplethRange.min}
+            max={choroplethRange.max}
+            footnote={`${valuedZones.length} zone${valuedZones.length === 1 ? "" : "s"} with values`}
+          />
+        </div>
+      )}
+
+      {measureMode && (
+        <div className="measure-card-wrap">
+          <MeasureCard
+            mode={measureMode}
+            points={measurePoints}
+            result={measureResult}
+            canUndo={measureUndo.length > 0}
+            canRedo={measureRedo.length > 0}
+            onUndo={handleMeasureUndo}
+            onRedo={handleMeasureRedo}
+            onClear={() => setMeasurePoints([])}
+            onClose={cancelMeasure}
+          />
+        </div>
+      )}
 
       {adding && (
         <AddSpotForm

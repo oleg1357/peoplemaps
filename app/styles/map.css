@@ -872,6 +872,17 @@
   bottom: 152px;
 }
 
+/* Measure FABs sit above the zone/route FABs. */
+.measure-fab {
+  border-color: var(--info);
+}
+#measure-distance-fab {
+  bottom: 216px;
+}
+#measure-area-fab {
+  bottom: 280px;
+}
+
 /* Shared floating card used by both the add-spot form and the zone/route draw form. */
 .map-draw-card {
   position: absolute;
@@ -2296,5 +2307,128 @@
   object-fit: contain;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+}
+
+/* ---------- Choropleth zone overlay ---------- */
+.layer-toggle-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.layer-toggle-disabled input {
+  cursor: not-allowed;
+}
+
+.choropleth-legend-wrap {
+  position: absolute;
+  z-index: 9998;
+  bottom: 24px;
+  left: 16px;
+}
+.choropleth-legend {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  min-width: 180px;
+  font-family: var(--font);
+}
+.choropleth-legend-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.choropleth-legend-bar {
+  height: 12px;
+  border-radius: 4px;
+}
+.choropleth-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.choropleth-legend-footnote {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.spot-tip-extra {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- Measurement tools ---------- */
+.measure-card-wrap {
+  position: absolute;
+  z-index: 9999;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.measure-card {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow-lg);
+  padding: 14px 16px;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font);
+}
+.measure-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.measure-card-top strong {
+  font-size: 14px;
+}
+.measure-card-top .close-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(19, 27, 35, 0.06);
+  border: none;
+  border-radius: 0;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.measure-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.measure-result {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green-dark);
+  line-height: 1.2;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.measure-result.empty {
+  color: var(--muted);
+  font-weight: 500;
+}
+.measure-actions {
+  display: flex;
+  gap: 8px;
+}
+.measure-actions .link-btn {
+  font-size: 12px;
 }
 
