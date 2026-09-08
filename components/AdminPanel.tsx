@@ -36,6 +36,9 @@ import {
   moderateRoutesBatch,
   exportMapBlob,
   fetchMapContributors,
+  fetchBillingStatus,
+  createCheckoutSession,
+  createPortalSession,
   backendLive,
   type AdminMapEntry,
   type AdminSpotList,
@@ -44,6 +47,7 @@ import {
   type ActivityEntryApi,
   type ActivityFilter,
   type AdminReport,
+  type BillingStatus,
   type MapSettingsInput,
   type MapRoleEntry,
   type BatchModerationAction,
@@ -226,6 +230,18 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
   const [createdMap, setCreatedMap] = useState<{ _id: string; slug: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Free-tier quota + subscription state.
+  const [billing, setBilling] = useState<BillingStatus>({
+    plan: "free",
+    isPaid: !backendLive,
+    subscriptionStatus: null,
+    publicMapCount: 0,
+    freePublicLimit: 3,
+    stripeConfigured: false,
+  });
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [manageBusy, setManageBusy] = useState(false);
+
   const [draft, setDraft] = useState<MapSettingsInput | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -298,6 +314,53 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
       active = false;
     };
   }, [user, initialMapId]);
+
+  // Load the free-tier quota + subscription state once signed in.
+  useEffect(() => {
+    if (!user || !backendLive) return;
+    let active = true;
+    fetchBillingStatus()
+      .then((b) => {
+        if (!active) return;
+        setBilling(b);
+      })
+      .catch(() => {
+        if (!active) return;
+        // Keep the free defaults on failure; the server still enforces limits.
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // Redirect the user to Stripe Checkout to subscribe to Pro.
+  const handleUpgrade = async () => {
+    if (upgradeBusy) return;
+    setUpgradeBusy(true);
+    setCreateError("");
+    try {
+      const { url } = await createCheckoutSession();
+      window.location.href = url;
+    } catch (err) {
+      setCreateError((err as Error).message || "Could not start checkout.");
+    } finally {
+      setUpgradeBusy(false);
+    }
+  };
+
+  // Open Stripe's billing portal to cancel / update payment details.
+  const handleManageSubscription = async () => {
+    if (manageBusy) return;
+    setManageBusy(true);
+    try {
+      const { url } = await createPortalSession();
+      window.location.href = url;
+    } catch (err) {
+      setCreateError((err as Error).message || "Could not open billing.");
+    } finally {
+      setManageBusy(false);
+    }
+  };
 
   const handleCreateMap = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -855,6 +918,13 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
             setCreateTitle={setCreateTitle}
             setCreateDesc={setCreateDesc}
             setCreatePublic={setCreatePublic}
+            isPaid={billing.isPaid}
+            publicMapCount={billing.publicMapCount}
+            freePublicLimit={billing.freePublicLimit}
+            upgradeBusy={upgradeBusy}
+            onUpgrade={handleUpgrade}
+            manageBusy={manageBusy}
+            onManage={handleManageSubscription}
           />
         )}
 

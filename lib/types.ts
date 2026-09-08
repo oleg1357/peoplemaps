@@ -334,3 +334,25 @@ export interface ProfileData {
     photos: ProfilePhotoContribution[];
   };
 }
+
+// Per-user billing/profile row stored in Mongo (keyed by Supabase auth id).
+// Feeds the free-tier map quota and gates the "private" visibility option.
+export type PlanTier = "free" | "pro";
+
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "incomplete"
+  | "canceled"
+  | "unpaid";
+
+export interface UserProfile {
+  userId: string;
+  plan: PlanTier;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  proSince?: string | null;
+  updatedAt: string;
+}

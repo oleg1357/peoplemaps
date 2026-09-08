@@ -356,6 +356,38 @@ export interface AdminMapsResponse {
   isAdmin: boolean;
 }
 
+// Free-tier quota + subscription state surfaced to the admin panel.
+export interface BillingStatus {
+  plan: "free" | "pro";
+  isPaid: boolean;
+  subscriptionStatus: string | null;
+  publicMapCount: number;
+  freePublicLimit: number;
+  stripeConfigured: boolean;
+}
+
+export async function fetchBillingStatus(): Promise<BillingStatus> {
+  if (!backendLive) {
+    return {
+      plan: "free",
+      isPaid: true, // demo mode has no quotas
+      subscriptionStatus: null,
+      publicMapCount: 0,
+      freePublicLimit: 3,
+      stripeConfigured: false,
+    };
+  }
+  return req<BillingStatus>("/api/billing/status");
+}
+
+export async function createCheckoutSession(): Promise<{ url: string }> {
+  return req<{ url: string }>("/api/billing/checkout", { method: "POST" });
+}
+
+export async function createPortalSession(): Promise<{ url: string }> {
+  return req<{ url: string }>("/api/billing/portal", { method: "POST" });
+}
+
 export interface CreateMapInput {
   title: string;
   description?: string;

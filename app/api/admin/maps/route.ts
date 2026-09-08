@@ -2,6 +2,12 @@ import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json } from "@/lib/api";
 import { NextResponse } from "next/server";
 import { getAdminContext, canManageMap, getMap, getMapRoleType } from "@/lib/admin";
+import {
+  countOwnedPublicMaps,
+  FREE_PUBLIC_MAP_LIMIT,
+  getUserProfile,
+  isPaidProfile,
+} from "@/lib/billing";
 import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { serverClient, writeClient } from "@/sanity/lib/client";
 import { getServerSupabase } from "@/lib/supabase-server";
@@ -154,6 +160,30 @@ export async function POST(req: Request) {
 
   const isPublic = body.isPublic === "private" ? "private" : "public";
 
+  // Free-tier quota: up to FREE_PUBLIC_MAP_LIMIT public maps; private maps are
+  // a Pro feature. Global admins are exempt.
+  if (!ctx.isGlobalAdmin && ctx.userId) {
+    const [profile, publicCount] = await Promise.all([
+      getUserProfile(ctx.userId),
+      countOwnedPublicMaps(ctx.userId),
+    ]);
+    const paid = isPaidProfile(profile);
+    if (!paid && isPublic === "private") {
+      return json(
+        { error: "Private maps are a Pro feature. Upgrade to Pro to make maps private." },
+        { status: 403 }
+      );
+    }
+    if (!paid && publicCount >= FREE_PUBLIC_MAP_LIMIT) {
+      return json(
+        {
+          error: `Free accounts can create up to ${FREE_PUBLIC_MAP_LIMIT} public maps. Upgrade to Pro for unlimited maps and private visibility.`,
+        },
+        { status: 403 }
+      );
+    }
+  }
+
   // Settings with validated defaults.
   const accentColor = hasValidColor(body.accentColor)
     ? String(body.accentColor)
@@ -252,7 +282,18 @@ export async function PATCH(req: Request) {
   }
   if (input.description !== undefined) patch.description = String(input.description ?? "");
   if (input.isPublic !== undefined && String(input.isPublic) !== "") {
-    patch.isPublic = input.isPublic === "private" ? "private" : "public";
+    const nextIsPublic = input.isPublic === "private" ? "private" : "public";
+    // Private visibility is a Pro feature (enforced here, not just in the UI).
+    if (nextIsPublic === "private" && !ctx.isGlobalAdmin && ctx.userId) {
+      const profile = await getUserProfile(ctx.userId);
+      if (!isPaidProfile(profile)) {
+        return json(
+          { error: "Private maps are a Pro feature. Upgrade to Pro to make maps private." },
+          { status: 403 }
+        );
+      }
+    }
+    patch.isPublic = nextIsPublic;
   }
   if (input.accentColor !== undefined) {
     if (!hasValidColor(String(input.accentColor))) {
