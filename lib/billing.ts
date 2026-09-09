@@ -5,7 +5,7 @@ import type { SubscriptionStatus, UserProfile } from "@/lib/types";
 // Free public maps a user may own (private maps are a Pro feature).
 export const FREE_PUBLIC_MAP_LIMIT = 3;
 
-// Stripe statuses that count as paid.
+// Paddle statuses that count as paid.
 export const ACTIVE_SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "active",
   "trialing",

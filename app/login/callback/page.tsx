@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginCallback() {
   const router = useRouter();
@@ -15,11 +16,17 @@ export default function LoginCallback() {
 
   return (
     <div className="page">
-      <div className="sign-box" style={{ margin: "0 auto", maxWidth: 360 }}>
-        <div className="signin auth-card">
-          <h2>Signing you in…</h2>
-          <p style={{ color: "var(--muted)", textAlign: "center" }}>One moment</p>
-        </div>
+      <div className="flex h-full items-center justify-center px-4">
+        <Card className="w-full max-w-[375px] shadow-lg">
+          <CardHeader className="items-center pt-6">
+            <CardTitle>Signing you in…</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <p className="text-center text-sm text-muted-foreground">
+              One moment
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

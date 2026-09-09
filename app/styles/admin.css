@@ -20,51 +20,6 @@
   position: relative;
 }
 
-.admin-create-btn {
-  margin-top: 14px;
-}
-
-.admin-create-map {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 480px;
-  margin: 18px 0;
-  padding: 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-
-.admin-create-map h3 {
-  margin: 0;
-}
-
-.admin-create-map .action-btn {
-  align-self: flex-start;
-}
-
-.admin-quota {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--ink);
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.admin-quota .upgrade-btn {
-  align-self: flex-start;
-}
-.admin-quota.paid {
-  border-color: var(--green);
-  color: var(--green-dark);
-}
-
 .admin-empty {
   display: flex;
   flex-direction: column;
@@ -80,191 +35,6 @@
 
 .admin-empty svg {
   color: var(--green);
-}
-
-.admin-map-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 24px 0 16px;
-}
-
-.admin-map-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--ink);
-  padding: 9px 14px;
-  border-radius: 0;
-  font: inherit;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all .15s ease;
-}
-
-.admin-map-tab:hover {
-  border-color: var(--green);
-}
-
-.admin-map-tab.active {
-  background: var(--green);
-  border-color: var(--green);
-  color: #fff;
-}
-
-.admin-map-tab-badge {
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-  border-radius: 0;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 7px;
-  min-width: 20px;
-  text-align: center;
-}
-
-.admin-map-tab:not(.active) .admin-map-tab-badge {
-  background: var(--green);
-  color: #fff;
-}
-
-.admin-map-tab-chip {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  border-radius: 0;
-  padding: 1px 7px;
-  background: rgba(0,0,0,0.12);
-  color: #fff;
-}
-
-.admin-map-tab:not(.active) .admin-map-tab-chip {
-  background: var(--surface-3);
-  color: var(--text-dim);
-}
-
-.admin-moderator-add {
-  margin: 12px 0;
-}
-
-.admin-moderator-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.admin-moderator-add-row input {
-  flex: 1;
-  min-width: 240px;
-}
-
-.admin-moderator-list {
-  list-style: none;
-  margin: 8px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.admin-moderator-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.admin-moderator-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-moderator-name {
-  font-weight: 600;
-}
-
-.admin-section {
-  margin-top: 4px;
-}
-
-.admin-permalink,
-.admin-permalink-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  margin: 10px 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13px;
-}
-
-.admin-permalink code,
-.admin-permalink-row code {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 4px 8px;
-  word-break: break-all;
-}
-
-.admin-permalink-row {
-  margin-bottom: 20px;
-}
-
-.admin-stat-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.admin-stat {
-  flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.admin-stat b {
-  font-size: 24px;
-  color: var(--ink);
-  line-height: 1;
-}
-
-.admin-stat span {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-
-.admin-stat.pending b { color: var(--warning); }
-.admin-stat.hidden b { color: var(--danger); }
-
-.admin-spot-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .admin-spot {
@@ -343,31 +113,6 @@
   flex-wrap: wrap;
 }
 
-.action-btn.reject {
-  background: var(--danger) !important;
-}
-
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 8px 9px;
-  border-radius: 0;
-  cursor: pointer;
-  transition: all .15s ease;
-}
-
-.icon-btn:hover { border-color: var(--border); color: var(--ink); }
-
-.icon-btn.danger:hover {
-  background: rgba(214,69,61,.1);
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
 .admin-spot.edit {
   display: block;
   border-left: 4px solid var(--info);
@@ -378,6 +123,28 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 12px;
+}
+
+/* --- Map owner settings / admin forms --- */
+
+.admin-panel-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.admin-panel-group h4 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
 }
 
 .admin-field {
@@ -406,51 +173,25 @@
   border-color: var(--green);
 }
 
-.admin-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 1000;
-}
-
-.admin-modal-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  max-width: 420px;
-  width: 100%;
-  box-shadow: var(--shadow-lg);
-}
-
-.admin-modal-card h3 {
-  margin: 0 0 8px;
+.admin-field textarea {
+  font: inherit;
+  font-weight: 400;
   color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px 10px;
+  resize: vertical;
 }
 
-.admin-modal-card p {
-  margin: 0 0 20px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.admin-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.admin-field textarea:focus {
+  outline: none;
+  border-color: var(--green);
 }
 
 @media only screen and (max-width: 480px) {
   .admin-edit-grid {
     grid-template-columns: 1fr 1fr;
-  }
-  .admin-stat-row {
-    flex-direction: column;
   }
   #map-controls {
     top: 120px;
@@ -597,151 +338,13 @@
   cursor: pointer;
 }
 
-/* --- Map owner settings / admin forms --- */
-
-.admin-panel-group {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding: 16px;
-  margin: 12px 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.admin-panel-group h4 {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--muted);
-}
-
-.admin-field textarea {
-  font: inherit;
-  font-weight: 400;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 8px 10px;
-  resize: vertical;
-}
-
-.admin-field textarea:focus {
-  outline: none;
-  border-color: var(--green);
-}
-
-.admin-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.admin-inner-tabs {
-  display: flex;
-  gap: 6px;
-  margin: 4px 0 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.admin-inner-tab {
-  padding: 8px 14px;
-  font: inherit;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.admin-inner-tab:hover {
-  color: var(--ink);
-}
-
-.admin-inner-tab.active {
-  color: var(--green);
-  border-bottom-color: var(--green);
-}
-
-.admin-map-tab-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-danger-zone {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 24px;
-  padding: 16px;
-  border: 1px solid rgba(214, 69, 61, .35);
-  border-radius: var(--radius);
-  background: rgba(214, 69, 61, .05);
-}
-
-.admin-danger-zone strong {
-  color: var(--danger);
-}
-
-.admin-danger-zone p {
-  margin: 4px 0 0;
-  font-size: 13px;
-}
-
-.admin-danger-zone .action-btn {
-  background: var(--danger);
-}
-
-.admin-danger-zone .action-btn:hover {
-  background: var(--danger-dark);
-}
-
-.action-btn.danger {
-  background: var(--danger);
-}
-
-.action-btn.danger:hover {
-  background: var(--danger-dark);
-}
-
-/* Map welcome + submission notes */
+/* Map welcome */
 .map-welcome {
   border-width: 2px !important;
   border-style: solid !important;
 }
 
-.map-submit-note {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 6px 10px;
-  border-left: 3px solid var(--green);
-  background: var(--surface-2);
-  border-radius: 0;
-}
-
-
-/* Admin: zones & routes color swatch + subheadings */
-.admin-subheading {
-  margin: 14px 0 8px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
+/* Admin: zones & routes color swatch */
 .admin-color-swatch {
   display: inline-block;
   width: 16px;
@@ -749,115 +352,6 @@
   border-radius: 4px;
   border: 1px solid rgba(127, 127, 127, 0.4);
   flex: 0 0 auto;
-}
-
-/* Admin: activity log */
-.admin-activity-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 480px;
-  overflow-y: auto;
-}
-
-.admin-activity-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin: 8px 0 12px;
-}
-
-.admin-activity-filters input,
-.admin-activity-filters select,
-.admin-activity-filters label {
-  font-size: 13px;
-  font-family: var(--font);
-}
-
-
-.admin-activity-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-
-.admin-activity-row:last-child {
-  border-bottom: none;
-}
-
-.admin-activity-when {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.admin-activity-action {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.admin-activity-target {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink-soft, inherit);
-}
-
-/* Admin: bulk moderation toolbar */
-.admin-moderation-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  margin-bottom: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.admin-moderation-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.admin-moderation-filters input,
-.admin-moderation-filters select {
-  font: inherit;
-  font-weight: 400;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 8px 10px;
-}
-
-.admin-moderation-filters select:focus {
-  outline: none;
-  border-color: var(--green);
-}
-
-.admin-search {
-  min-width: 220px;
-  flex: 1;
-}
-
-.admin-moderation-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.admin-moderation-row .action-btn:disabled,
-.admin-moderation-row .action-btn2:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .admin-select-check {
@@ -873,145 +367,4 @@
   height: 16px;
   accent-color: var(--green);
   cursor: pointer;
-}
-
-.admin-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 10px;
-}
-
-.admin-filter-chip button {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-weight: 700;
-  padding: 0;
-  line-height: 1;
-}
-
-.admin-filter-chip button:hover {
-  color: var(--danger);
-}
-
-/* Admin: contributors */
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.admin-table th,
-.admin-table td {
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-
-.admin-table th {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.admin-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.admin-table .num {
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft, inherit);
-}
-
-/* Admin: auto-moderation rules */
-.admin-rules-list {
-  list-style: none;
-  margin: 12px 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.admin-rule {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  font-size: 13px;
-}
-
-.admin-rule-action {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-.admin-rule-action.approve {
-  color: #1a7f37;
-  background: rgba(35, 134, 54, 0.12);
-}
-
-.admin-rule-action.reject {
-  color: var(--danger);
-  background: rgba(214, 69, 61, 0.12);
-}
-
-.admin-rule-pattern {
-  font-size: 13px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 8px;
-}
-
-.admin-rules-add {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.admin-rules-add input,
-.admin-rules-add select {
-  font: inherit;
-  font-weight: 400;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 8px 10px;
-}
-
-.admin-rules-add input {
-  flex: 1;
-  min-width: 180px;
-}
-
-.admin-rules-add input:focus,
-.admin-rules-add select:focus {
-  outline: none;
-  border-color: var(--green);
 }

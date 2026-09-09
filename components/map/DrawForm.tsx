@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 interface DrawFormProps {
   drawMode: "zone" | "route";
   drawPoints: [number, number][];
@@ -51,40 +54,42 @@ export function DrawForm({
         e.preventDefault();
         saveDraw(drawMode);
       }}
-      className="map-draw-card"
+      className="absolute bottom-24 left-1/2 z-[1000] flex w-[min(360px,90vw)] -translate-x-1/2 flex-col gap-2.5 border border-border bg-surface p-4 text-ink shadow-(--shadow-lg)"
     >
-      <strong>{drawMode === "zone" ? "Add zone" : "Add route"}</strong>
-      <span className="draw-desc">
+      <strong className="text-[15px] font-bold">
+        {drawMode === "zone" ? "Add zone" : "Add route"}
+      </strong>
+      <span className="text-xs leading-snug text-muted-foreground">
         {isZone
           ? `Click the map to place corners — ${drawPoints.length} placed, need at least 3.`
           : `Click the map to place points — ${drawPoints.length} placed, need at least 2.`}
       </span>
-      <div className="map-draw-actions">
-        <button type="button" className="link-btn" onClick={handleUndoPoint} disabled={drawUndo.length === 0}>
+      <div className="flex gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={handleUndoPoint} disabled={drawUndo.length === 0}>
           Undo point
-        </button>
-        <button type="button" className="link-btn" onClick={handleRedoPoint} disabled={drawRedo.length === 0}>
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={handleRedoPoint} disabled={drawRedo.length === 0}>
           Redo point
-        </button>
-        <button type="button" className="link-btn" onClick={cancelDraw}>
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={cancelDraw}>
           Cancel
-        </button>
+        </Button>
       </div>
-      <input
+      <Input
         value={drawName}
         onChange={(e) => setDrawName(e.target.value)}
         placeholder={`${drawMode === "zone" ? "Zone name" : "Route name"} (required)`}
       />
-      <input
+      <Input
         value={drawDesc}
         onChange={(e) => setDrawDesc(e.target.value)}
         placeholder="Description (optional)"
       />
       {isZone && (
-        <div className="map-draw-value-row">
-          <div className="map-draw-value">
-            <span className="color-label">Value</span>
-            <input
+        <div className="flex gap-2">
+          <div className="flex flex-1 flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Value</span>
+            <Input
               type="number"
               step="any"
               min="0"
@@ -94,9 +99,9 @@ export function DrawForm({
               title="Numeric value shown in the choropleth overlay (optional)"
             />
           </div>
-          <div className="map-draw-value">
-            <span className="color-label">Count</span>
-            <input
+          <div className="flex flex-1 flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Count</span>
+            <Input
               type="number"
               step="1"
               min="0"
@@ -108,34 +113,35 @@ export function DrawForm({
           </div>
         </div>
       )}
-      <div className="map-draw-color">
-        <span className="color-label">Color</span>
-        <input
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Color</span>
+        <Input
           type="color"
           value={drawColor}
           onChange={(e) => setDrawColor(e.target.value)}
           title="Color"
+          className="h-10 w-10 cursor-pointer p-1"
         />
-        <input
+        <Input
           type="text"
           value={drawColor}
           onChange={(e) => { if (/^#[0-9a-fA-F]{3,8}$/.test(e.target.value)) setDrawColor(e.target.value); }}
           pattern="#[0-9a-fA-F]{3,8}"
           title="Hex color"
+          className="w-[92px] font-mono text-[13px]"
         />
       </div>
       {drawError && (
-        <div className="draw-error">
+        <div className="text-xs text-destructive">
           <strong>Could not add {drawMode}:</strong> {drawError}
         </div>
       )}
-      <button
+      <Button
         type="submit"
-        className="action-btn2"
         title={!drawName.trim() ? "Enter a name to save" : undefined}
       >
         Save {drawMode}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -3,7 +3,21 @@
 import type { AdminZoneList, AdminRouteList } from "@/lib/api-client";
 import { backendLive } from "@/lib/api-client";
 import type { Zone, Route } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import { ZoneAdminRow, RouteAdminRow } from "../AdminPanel";
+
+function StatCard({ value, label, tone }: { value: number | string; label: string; tone?: "warning" | "danger" }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border bg-card p-3.5 shadow-sm">
+      <b className={`text-2xl leading-none ${tone === "warning" ? "text-warning" : tone === "danger" ? "text-danger" : ""}`}>
+        {value}
+      </b>
+      <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 export default function AdminZonesView({
   zoneData,
@@ -59,64 +73,48 @@ export default function AdminZonesView({
   onRejectAllPendingRoutes: () => void;
 }) {
   return (
-    <div className="admin-section">
-      <h3>Zones &amp; routes</h3>
-      <p className="muted">
-        Approve, hide, edit or remove the zones and routes people
-        have drawn on this map.
+    <div className="mt-4">
+      <h3 className="mb-1 font-heading text-lg font-semibold">Zones &amp; routes</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Approve, hide, edit or remove the zones and routes people have drawn on
+        this map.
       </p>
-      <div className="admin-stat-row">
-        <div className="admin-stat">
-          <b>{zoneData?.total ?? "–"}</b>
-          <span>Zones</span>
-        </div>
-        <div className="admin-stat pending">
-          <b>{zoneData?.pending ?? "–"}</b>
-          <span>Pending</span>
-        </div>
-        <div className="admin-stat hidden">
-          <b>{zoneData?.hidden ?? "–"}</b>
-          <span>Hidden</span>
-        </div>
-        <div className="admin-stat">
-          <b>{routeData?.total ?? "–"}</b>
-          <span>Routes</span>
-        </div>
-        <div className="admin-stat pending">
-          <b>{routeData?.pending ?? "–"}</b>
-          <span>Pending</span>
-        </div>
-        <div className="admin-stat hidden">
-          <b>{routeData?.hidden ?? "–"}</b>
-          <span>Hidden</span>
-        </div>
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard value={zoneData?.total ?? "–"} label="Zones" />
+        <StatCard value={zoneData?.pending ?? "–"} label="Pending" tone="warning" />
+        <StatCard value={zoneData?.hidden ?? "–"} label="Hidden" tone="danger" />
+        <StatCard value={routeData?.total ?? "–"} label="Routes" />
+        <StatCard value={routeData?.pending ?? "–"} label="Pending" tone="warning" />
+        <StatCard value={routeData?.hidden ?? "–"} label="Hidden" tone="danger" />
       </div>
 
-      {error && <p className="auth-error">{error}</p>}
+      {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
 
       {loadingZones || loadingRoutes ? (
-        <p className="muted">Loading zones and routes…</p>
+        <p className="text-sm text-muted-foreground">Loading zones and routes…</p>
       ) : (
         <>
-          <h4 className="admin-subheading">Zones</h4>
+          <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Zones
+          </h4>
           {backendLive && zoneData && (zoneData.pending > 0 || zoneData.zones.length > 0) && (
-            <div className="admin-moderation-row" style={{ margin: "8px 0 12px" }}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               {zoneData.pending > 0 && (
                 <>
-                  <button type="button" className="action-btn" onClick={onApproveAllPendingZones}>
+                  <Button type="button" size="sm" onClick={onApproveAllPendingZones}>
                     Approve all {zoneData.pending} pending zones
-                  </button>
-                  <button type="button" className="action-btn reject" onClick={onRejectAllPendingZones}>
+                  </Button>
+                  <Button type="button" size="sm" variant="destructive" onClick={onRejectAllPendingZones}>
                     Reject all pending zones
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
           )}
           {zoneData && zoneData.zones.length === 0 ? (
-            <p className="empty-state">No zones on this map yet.</p>
+            <p className="text-sm text-muted-foreground">No zones on this map yet.</p>
           ) : (
-            <ul className="admin-spot-list">
+            <ul className="flex flex-col gap-2.5">
               {zoneData &&
                 zoneData.zones.map((zone) => (
                   <ZoneAdminRow
@@ -141,25 +139,27 @@ export default function AdminZonesView({
             </ul>
           )}
 
-          <h4 className="admin-subheading">Routes</h4>
+          <h4 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Routes
+          </h4>
           {backendLive && routeData && (routeData.pending > 0 || routeData.routes.length > 0) && (
-            <div className="admin-moderation-row" style={{ margin: "8px 0 12px" }}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               {routeData.pending > 0 && (
                 <>
-                  <button type="button" className="action-btn" onClick={onApproveAllPendingRoutes}>
+                  <Button type="button" size="sm" onClick={onApproveAllPendingRoutes}>
                     Approve all {routeData.pending} pending routes
-                  </button>
-                  <button type="button" className="action-btn reject" onClick={onRejectAllPendingRoutes}>
+                  </Button>
+                  <Button type="button" size="sm" variant="destructive" onClick={onRejectAllPendingRoutes}>
                     Reject all pending routes
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
           )}
           {routeData && routeData.routes.length === 0 ? (
-            <p className="empty-state">No routes on this map yet.</p>
+            <p className="text-sm text-muted-foreground">No routes on this map yet.</p>
           ) : (
-            <ul className="admin-spot-list">
+            <ul className="flex flex-col gap-2.5">
               {routeData &&
                 routeData.routes.map((route) => (
                   <RouteAdminRow

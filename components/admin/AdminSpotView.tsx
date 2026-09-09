@@ -8,6 +8,15 @@ import type {
 } from "@/lib/api-client";
 import { backendLive } from "@/lib/api-client";
 import type { Spot } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AdminSpotRow } from "../AdminPanel";
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected" | "hidden";
@@ -108,110 +117,131 @@ export default function AdminSpotView({
   };
 
   return (
-    <div className="admin-section">
-      <div className="admin-stat-row">
-        <div className="admin-stat">
-          <b>{data?.total ?? "–"}</b>
-          <span>Total</span>
+    <div className="mt-4">
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-3.5 shadow-sm">
+          <b className="text-2xl leading-none">{data?.total ?? "–"}</b>
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Total
+          </span>
         </div>
-        <div className="admin-stat pending">
-          <b>{data?.pending ?? "–"}</b>
-          <span>Pending</span>
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-3.5 shadow-sm">
+          <b className="text-2xl leading-none text-warning">{data?.pending ?? "–"}</b>
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Pending
+          </span>
         </div>
-        <div className="admin-stat hidden">
-          <b>{data?.hidden ?? "–"}</b>
-          <span>Hidden</span>
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-3.5 shadow-sm">
+          <b className="text-2xl leading-none text-danger">{data?.hidden ?? "–"}</b>
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Hidden
+          </span>
         </div>
       </div>
 
-      {error && <p className="auth-error">{error}</p>}
+      {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
 
       {backendLive && allSpots.length > 0 && !loadingSpots && (
-        <div className="admin-moderation-toolbar">
-          <div className="admin-moderation-filters">
-            <input
+        <div className="mb-4 rounded-lg border bg-card p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
               type="search"
-              className="admin-search"
               placeholder="Search name, city or tags…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="min-w-52 flex-1"
             />
-            <select
+            <Select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              onValueChange={(v) => setStatusFilter((v || "all") as StatusFilter)}
             >
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="hidden">Hidden</option>
-            </select>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {creatorFilter && (
-            <span className="admin-filter-chip">
-              Contributor: {creatorFilter || "Anonymous"}{" "}
-              <button type="button" onClick={onClearCreatorFilter}>
+            <span className="mt-2.5 inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-sm font-semibold">
+              Contributor: {creatorFilter || "Anonymous"}
+              <button
+                type="button"
+                onClick={onClearCreatorFilter}
+                className="leading-none font-bold text-muted-foreground hover:text-destructive"
+              >
                 ✕
               </button>
             </span>
           )}
 
-          <div className="admin-moderation-row">
-            <label className="admin-check">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleAll}
                 disabled={filteredIds.length === 0}
+                className="size-4 accent-[var(--green)]"
               />
               Select {filtered.length} shown
             </label>
-            <span className="muted">
-              {selected.size > 0 && `${selected.size} selected`}
-            </span>
-            <button
+            {selected.size > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {selected.size} selected
+              </span>
+            )}
+            <Button
               type="button"
-              className="action-btn"
+              size="sm"
               disabled={selected.size === 0}
               onClick={() => runBatch("approve")}
             >
               Approve
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="action-btn reject"
+              size="sm"
+              variant="destructive"
               disabled={selected.size === 0}
               onClick={() => runBatch("reject")}
             >
               Reject
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="action-btn2"
+              size="sm"
+              variant="outline"
               disabled={selected.size === 0}
               onClick={() => runBatch("hide")}
             >
               Hide
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="action-btn2"
+              size="sm"
+              variant="outline"
               disabled={selected.size === 0}
               onClick={() => runBatch("restore")}
             >
               Restore
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {loadingSpots ? (
-        <p className="muted">Loading spots…</p>
+        <p className="text-sm text-muted-foreground">Loading spots…</p>
       ) : (
         <>
           {data && filtered.length === 0 && (
-            <p className="empty-state">
+            <p className="text-sm text-muted-foreground">
               {allSpots.length === 0
                 ? "No spots on this map yet."
                 : "No spots match the current filters."}
@@ -219,7 +249,7 @@ export default function AdminSpotView({
           )}
 
           {filtered.length > 0 && (
-            <ul className="admin-spot-list">
+            <ul className="flex flex-col gap-2.5">
               {filtered.map((spot) => (
                 <AdminSpotRow
                   key={spot._id}

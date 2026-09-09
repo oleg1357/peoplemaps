@@ -343,15 +343,14 @@ export type SubscriptionStatus =
   | "active"
   | "trialing"
   | "past_due"
-  | "incomplete"
-  | "canceled"
-  | "unpaid";
+  | "paused"
+  | "canceled";
 
 export interface UserProfile {
   userId: string;
   plan: PlanTier;
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
+  paddleCustomerId?: string | null;
+  paddleSubscriptionId?: string | null;
   subscriptionStatus?: SubscriptionStatus | null;
   proSince?: string | null;
   updatedAt: string;

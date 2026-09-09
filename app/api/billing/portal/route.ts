@@ -1,9 +1,9 @@
 import { json } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import { getUserProfile } from "@/lib/billing";
-import { getStripe } from "@/lib/stripe";
+import { getPaddle } from "@/lib/paddle";
 
-// POST /api/billing/portal -> open Stripe's billing portal (cancel / update
+// POST /api/billing/portal -> open Paddle's customer portal (cancel / update
 // payment method) for a Pro subscriber.
 export async function POST(req: Request) {
   const ctx = await getAdminContext(req);
@@ -11,8 +11,8 @@ export async function POST(req: Request) {
     return json({ error: "You must be signed in." }, { status: 401 });
   }
 
-  const stripe = getStripe();
-  if (!stripe) {
+  const paddle = getPaddle();
+  if (!paddle) {
     return json(
       { error: "Billing is not configured on this server." },
       { status: 503 }
@@ -20,23 +20,25 @@ export async function POST(req: Request) {
   }
 
   const profile = await getUserProfile(ctx.userId);
-  if (!profile.stripeCustomerId) {
+  if (!profile.paddleCustomerId) {
     return json({ error: "No billing account yet." }, { status: 400 });
   }
 
-  const origin =
-    req.headers.get("origin") ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "http://localhost:3000";
-
   try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: profile.stripeCustomerId,
-      return_url: `${origin}/dashboard`,
-    });
-    return json({ url: session.url });
+    const session = await paddle.customerPortalSessions.create(
+      profile.paddleCustomerId,
+      profile.paddleSubscriptionId ? [profile.paddleSubscriptionId] : []
+    );
+    const url = session.urls.general.overview;
+    if (!url) {
+      return json(
+        { error: "Paddle could not open the billing portal." },
+        { status: 500 }
+      );
+    }
+    return json({ url });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Stripe error";
+    const message = err instanceof Error ? err.message : "Unknown Paddle error";
     return json({ error: `Portal failed: ${message}` }, { status: 500 });
   }
 }

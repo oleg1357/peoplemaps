@@ -2,6 +2,7 @@
 
 import { AuthProvider } from "./AuthContext";
 import { ThemeProvider } from "./ThemeContext";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // MapProvider is intentionally NOT global: it loads every public map (and the
 // selected map's data) from Sanity, which is only needed on the map routes.
@@ -9,7 +10,9 @@ import { ThemeProvider } from "./ThemeContext";
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <TooltipProvider>{children}</TooltipProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

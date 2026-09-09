@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { AdminField, selectInputCls } from "../AdminPanel";
+
 export default function AdminCreateMap({
   createTitle,
   createDesc,
@@ -37,27 +41,28 @@ export default function AdminCreateMap({
 }) {
   const remaining = Math.max(0, freePublicLimit - publicMapCount);
   return (
-    <form className="admin-create-map" onSubmit={onSubmit}>
-      <h3>Create a new map</h3>
-      <label className="admin-field">
-        <span>Title</span>
-        <input
+    <form
+      className="mt-4 flex max-w-xl flex-col gap-3 rounded-xl border bg-card p-5 shadow-sm"
+      onSubmit={onSubmit}
+    >
+      <h3 className="font-heading text-base font-semibold">Create a new map</h3>
+      <AdminField label="Title">
+        <Input
           value={createTitle}
           onChange={(e) => setCreateTitle(e.target.value)}
           placeholder="e.g. Best Coffee in Copenhagen"
         />
-      </label>
-      <label className="admin-field">
-        <span>Description (optional)</span>
-        <input
+      </AdminField>
+      <AdminField label="Description (optional)">
+        <Input
           value={createDesc}
           onChange={(e) => setCreateDesc(e.target.value)}
           placeholder="What is this map about?"
         />
-      </label>
-      <label className="admin-field">
-        <span>Visibility</span>
+      </AdminField>
+      <AdminField label="Visibility">
         <select
+          className={selectInputCls}
           value={createPublic}
           onChange={(e) => setCreatePublic(e.target.value as "public" | "private")}
         >
@@ -70,37 +75,44 @@ export default function AdminCreateMap({
             </option>
           )}
         </select>
-      </label>
+      </AdminField>
 
       {!isPaid && (
-        <div className="admin-quota">
+        <div className="flex flex-col items-start gap-2 rounded-lg border bg-muted/40 px-3.5 py-3 text-sm">
           <span>
             Free plan: {publicMapCount} of {freePublicLimit} public maps used
             {remaining > 0 ? ` (${remaining} left)` : ""}.
           </span>
-          <button type="button" className="action-btn2 upgrade-btn" disabled={upgradeBusy} onClick={onUpgrade}>
+          <Button type="button" size="sm" disabled={upgradeBusy} onClick={onUpgrade}>
             {upgradeBusy ? "Opening checkout…" : "Upgrade to Pro"}
-          </button>
-          <span className="muted">Unlimited maps · private maps · priority support</span>
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Unlimited maps · private maps · priority support
+          </span>
         </div>
       )}
       {isPaid && (
-        <div className="admin-quota paid">
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-green bg-muted/40 px-3.5 py-3 text-sm text-green-dark">
           <span>Pro plan — unlimited public and private maps.</span>
-          <button type="button" className="action-btn2" disabled={manageBusy} onClick={onManage}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={manageBusy}
+            onClick={onManage}
+          >
             {manageBusy ? "Opening…" : "Manage subscription"}
-          </button>
+          </Button>
         </div>
       )}
 
-      {createError && <p className="auth-error">{createError}</p>}
-      <button
+      {createError && <p className="text-sm text-destructive">{createError}</p>}
+      <Button
         type="submit"
-        className="action-btn"
         disabled={createBusy || !createTitle.trim() || (!isPaid && remaining === 0)}
       >
         {createBusy ? "Creating…" : "Create map"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -43,70 +43,6 @@
   display: block;
 }
 
-#nav .nav-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-#nav a {
-  font-weight: 500;
-  color: var(--ink);
-  margin: 0;
-  padding: 8px 14px;
-  border-radius: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-  font-size: 15px;
-}
-
-#nav a:hover {
-  background: rgba(97, 198, 122, 0.14);
-}
-
-#nav a.active {
-  color: var(--green-dark);
-  font-weight: 600;
-  background: rgba(97, 198, 122, 0.12);
-}
-
-#nav a#map-link {
-  background-image: linear-gradient(19deg, var(--green) 0%, var(--green-light) 100%);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
-}
-
-#nav a#map-link:hover {
-  filter: brightness(1.03);
-  background-image: linear-gradient(19deg, var(--green-light) 0%, var(--green) 100%);
-}
-
-#nav a#map-link.active {
-  color: #fff;
-}
-
-#log-out {
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--ink);
-  padding: 8px 14px;
-  border-radius: 0;
-  font-size: 15px;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-#log-out:hover {
-  background: rgba(220, 70, 70, 0.12);
-  color: var(--danger);
-}
-
-#nav a,
-#nav #log-out {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* ---------- Mobile hamburger ---------- */
 .nav-burger {
   display: none;
@@ -158,29 +94,5 @@
   background: rgba(19, 27, 35, 0.28);
   cursor: pointer;
   backdrop-filter: blur(1px);
-}
-
-#theme-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-#theme-toggle:hover {
-  background: rgba(97, 198, 122, 0.14);
-  color: var(--green-dark);
-}
-
-#nav .nav-links #theme-toggle {
-  margin-left: 6px;
 }
 

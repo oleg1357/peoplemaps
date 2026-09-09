@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { selectInputCls } from "@/lib/utils";
 import {
   fetchAdminMaps,
   fetchAdminSpots,
@@ -74,6 +75,17 @@ import {
   IconTrash,
   IconX,
 } from "./icons";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import AdminCreateMap from "./admin/AdminCreateMap";
 import AdminSpotView from "./admin/AdminSpotView";
 import AdminZonesView from "./admin/AdminZonesView";
@@ -89,6 +101,8 @@ interface EditState {
 }
 
 const DEFAULT_BASE = { lat: 55.6761, lng: 12.5683 };
+
+export { selectInputCls };
 
 export function MarkerPreview({
   emoji,
@@ -237,7 +251,7 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
     subscriptionStatus: null,
     publicMapCount: 0,
     freePublicLimit: 3,
-    stripeConfigured: false,
+    paddleConfigured: false,
   });
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
@@ -333,7 +347,7 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
     };
   }, [user]);
 
-  // Redirect the user to Stripe Checkout to subscribe to Pro.
+  // Redirect the user to Paddle hosted checkout to subscribe to Pro.
   const handleUpgrade = async () => {
     if (upgradeBusy) return;
     setUpgradeBusy(true);
@@ -348,7 +362,7 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
     }
   };
 
-  // Open Stripe's billing portal to cancel / update payment details.
+  // Open Paddle's customer portal to cancel / update payment details.
   const handleManageSubscription = async () => {
     if (manageBusy) return;
     setManageBusy(true);
@@ -890,21 +904,22 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
 
   return (
     <div className="admin-shell">
-        <div className="admin-head">
-          <h1>Map Admin</h1>
-          <p className="muted">
-            Create maps, moderate spots, customise markers and manage settings.
-          </p>
-          <button
+        <div className="admin-head flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-1">
+            <h1 className="font-heading text-2xl font-bold tracking-tight">Map Admin</h1>
+            <p className="text-sm text-muted-foreground">
+              Create maps, moderate spots, customise markers and manage settings.
+            </p>
+          </div>
+          <Button
             type="button"
-            className="action-btn admin-create-btn"
             onClick={() => {
               setCreating((c) => !c);
               setCreateError("");
             }}
           >
             <IconPlus size={16} /> {creating ? "Cancel" : "Create map"}
-          </button>
+          </Button>
         </div>
 
         {creating && (
@@ -929,16 +944,18 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
         )}
 
         {createdMap && (
-          <div className="admin-permalink">
+          <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
             <IconLink size={16} />
-            <code>{permalink(createdMap)}</code>
-            <button
+            <code className="truncate">{permalink(createdMap)}</code>
+            <Button
               type="button"
-              className="action-btn"
+              size="sm"
+              variant="outline"
+              className="ml-auto shrink-0"
               onClick={() => copyLink(permalink(createdMap))}
             >
               {copied ? "Copied!" : "Copy link"}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -956,12 +973,16 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
           </div>
         ) : (
           <>
-            <div className="admin-map-tabs">
+            <div className="mb-4 flex flex-wrap gap-2">
               {maps.map((m) => (
                 <button
                   key={m._id}
                   type="button"
-                  className={`admin-map-tab ${activeMap?._id === m._id ? "active" : ""}`}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    activeMap?._id === m._id
+                      ? "border-transparent bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:border-primary"
+                  }`}
                   onClick={() => {
                     setActiveMap(m);
                     setView("spots");
@@ -969,19 +990,33 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                     setCreatorFilter(null);
                   }}
                 >
-                  <span className="admin-map-tab-name">
-                    <MarkerPreview
-                      emoji={m.defaultMarker}
-                      color={m.defaultMarkerColor}
-                      size={18}
-                    />
-                    {m.title}
-                  </span>
-{m.role && m.role !== "owner" && (
-                        <span className="admin-map-tab-chip">{m.role}</span>
-                      )}
+                  <MarkerPreview
+                    emoji={m.defaultMarker}
+                    color={m.defaultMarkerColor}
+                    size={18}
+                  />
+                  {m.title}
+                  {m.role && m.role !== "owner" && (
+                    <span
+                      className={`rounded-full px-1.5 py-px text-[10px] font-bold tracking-wider uppercase ${
+                        activeMap?._id === m._id
+                          ? "bg-white/20 text-white"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {m.role}
+                    </span>
+                  )}
                   {m.spotPending > 0 && (
-                    <span className="admin-map-tab-badge">{m.spotPending}</span>
+                    <span
+                      className={`min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold ${
+                        activeMap?._id === m._id
+                          ? "bg-white/25 text-white"
+                          : "bg-primary text-primary-foreground"
+                      }`}
+                    >
+                      {m.spotPending}
+                    </span>
                   )}
                 </button>
               ))}
@@ -989,10 +1024,14 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
 
             {activeMap && (
               <>
-                <div className="admin-inner-tabs">
+                <div className="mb-4 flex flex-wrap gap-1 border-b">
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "spots" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "spots"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => {
                       setView("spots");
                       setEdit(null);
@@ -1002,7 +1041,11 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                   </button>
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "zones" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "zones"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => {
                       setView("zones");
                       setZoneEdit(null);
@@ -1013,28 +1056,44 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                   </button>
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "activity" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "activity"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => setView("activity")}
                   >
                     Activity
                   </button>
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "reports" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "reports"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => setView("reports")}
                   >
                     Reports
                   </button>
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "bans" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "bans"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => setView("bans")}
                   >
                     Bans
                   </button>
                   <button
                     type="button"
-                    className={`admin-inner-tab ${view === "contributors" ? "active" : ""}`}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      view === "contributors"
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
                     onClick={() => setView("contributors")}
                   >
                     Contributors
@@ -1042,7 +1101,11 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                   {canManageMap && (
                     <button
                       type="button"
-                      className={`admin-inner-tab ${view === "moderators" ? "active" : ""}`}
+                      className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                        view === "moderators"
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
                       onClick={() => setView("moderators")}
                     >
                       Moderators
@@ -1051,7 +1114,11 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                   {canManageMap && (
                     <button
                       type="button"
-                      className={`admin-inner-tab ${view === "settings" ? "active" : ""}`}
+                      className={`-mb-px border-b-2 px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                        view === "settings"
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
                       onClick={() => setView("settings")}
                     >
                       Settings
@@ -1061,32 +1128,36 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
 
                 {view === "spots" && (
                   <>
-                    <div className="admin-permalink-row">
-                      <span className="muted">Permalink:</span>
-                      <code>{permalink(activeMap)}</code>
-                      <button
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
+                      <span className="text-muted-foreground">Permalink:</span>
+                      <code className="truncate">{permalink(activeMap)}</code>
+                      <Button
                         type="button"
-                        className="link-btn"
+                        size="sm"
+                        variant="outline"
+                        className="ml-auto shrink-0"
                         onClick={() => copyLink(permalink(activeMap))}
                       >
                         {copied ? "Copied!" : "Copy"}
-                      </button>
+                      </Button>
                       {backendLive && canExport && (
                         <>
-                          <button
+                          <Button
                             type="button"
-                            className="action-btn2"
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleExport("geojson")}
                           >
                             Export GeoJSON
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
-                            className="action-btn2"
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleExport("csv")}
                           >
                             Export CSV
-                          </button>
+                          </Button>
                         </>
                       )}
                     </div>
@@ -1250,47 +1321,58 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
         )}
 
         {confirmDestroy && (
-          <div className="admin-modal">
-            <div className="admin-modal-card">
-              <h3>Destroy this spot?</h3>
-              <p>
-                This permanently deletes <b>{confirmDestroy.name}</b> and all of
-                its reviews, photos and comments. This cannot be undone.
-              </p>
-              <div className="admin-modal-actions">
-                <button type="button" className="action-btn2" onClick={() => setConfirmDestroy(null)}>
-                  Cancel
-                </button>
-                <button
+          <Dialog open onOpenChange={(open) => !open && setConfirmDestroy(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Destroy this spot?</DialogTitle>
+                <DialogDescription>
+                  This permanently deletes <b>{confirmDestroy.name}</b> and all
+                  of its reviews, photos and comments. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
                   type="button"
-                  className="action-btn danger"
-                  onClick={handleDestroy}
+                  variant="outline"
+                  onClick={() => setConfirmDestroy(null)}
                 >
+                  Cancel
+                </Button>
+                <Button type="button" variant="destructive" onClick={handleDestroy}>
                   <IconTrash size={15} /> Destroy
-                </button>
-              </div>
-            </div>
-          </div>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
         {confirmDeleteMap && activeMap && (
-          <div className="admin-modal">
-            <div className="admin-modal-card">
-              <h3>Delete “{activeMap.title}”?</h3>
-              <p>
-                This permanently deletes the map and every spot, review, photo
-                and comment on it. This cannot be undone.
-              </p>
-              <div className="admin-modal-actions">
-                <button type="button" className="action-btn2" onClick={() => setConfirmDeleteMap(false)}>
+          <Dialog
+            open
+            onOpenChange={(open) => !open && setConfirmDeleteMap(false)}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete “{activeMap.title}”?</DialogTitle>
+                <DialogDescription>
+                  This permanently deletes the map and every spot, review, photo
+                  and comment on it. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmDeleteMap(false)}
+                >
                   Cancel
-                </button>
-                <button type="button" className="action-btn danger" onClick={handleDeleteMap}>
+                </Button>
+                <Button type="button" variant="destructive" onClick={handleDeleteMap}>
                   <IconTrash size={15} /> Delete map
-                </button>
-              </div>
-            </div>
-          </div>
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
   );
@@ -1340,32 +1422,32 @@ export function AdminSpotRow({
       <li className="admin-spot edit">
         <div className="admin-edit-grid">
           <AdminField label="Name">
-            <input
+            <Input
               value={editSpot.name}
               onChange={(e) => onEditChange({ ...editSpot, name: e.target.value })}
             />
           </AdminField>
           <AdminField label="Street">
-            <input
+            <Input
               value={editSpot.street}
               onChange={(e) => onEditChange({ ...editSpot, street: e.target.value })}
             />
           </AdminField>
           <AdminField label="City">
-            <input
+            <Input
               value={editSpot.city}
               onChange={(e) => onEditChange({ ...editSpot, city: e.target.value })}
             />
           </AdminField>
           <AdminField label="ZIP">
-            <input
+            <Input
               type="number"
               value={editSpot.zip}
               onChange={(e) => onEditChange({ ...editSpot, zip: Number(e.target.value) })}
             />
           </AdminField>
           <AdminField label="Lat">
-            <input
+            <Input
               type="number"
               step="any"
               value={editSpot.lat}
@@ -1373,7 +1455,7 @@ export function AdminSpotRow({
             />
           </AdminField>
           <AdminField label="Lng">
-            <input
+            <Input
               type="number"
               step="any"
               value={editSpot.lng}
@@ -1382,6 +1464,7 @@ export function AdminSpotRow({
           </AdminField>
           <AdminField label="Status">
             <select
+              className={selectInputCls}
               value={editSpot.status ?? "unknown"}
               onChange={(e) =>
                 onEditChange({
@@ -1401,6 +1484,7 @@ export function AdminSpotRow({
           <h4>Rich content</h4>
           <AdminField label="Price level">
             <select
+              className={selectInputCls}
               value={editSpot.priceLevel === null || editSpot.priceLevel === undefined ? "" : editSpot.priceLevel}
               onChange={(e) =>
                 onEditChange({
@@ -1417,7 +1501,7 @@ export function AdminSpotRow({
             </select>
           </AdminField>
           <AdminField label="Hours">
-            <input
+            <Input
               value={editSpot.hoursNote ?? ""}
               onChange={(e) =>
                 onEditChange({ ...editSpot, hoursNote: e.target.value })
@@ -1426,7 +1510,7 @@ export function AdminSpotRow({
             />
           </AdminField>
           <AdminField label="Tags">
-            <input
+            <Input
               value={(editSpot.tags ?? []).join(", ")}
               onChange={(e) =>
                 onEditChange({
@@ -1442,7 +1526,7 @@ export function AdminSpotRow({
             />
           </AdminField>
           <AdminField label="Insider tip">
-            <textarea
+            <Textarea
               rows={2}
               value={editSpot.tip ?? ""}
               onChange={(e) =>
@@ -1468,12 +1552,12 @@ export function AdminSpotRow({
         </div>
 
         <div className="admin-row-actions">
-          <button type="button" className="action-btn" onClick={onSaveEdit}>
+          <Button type="button" size="sm" onClick={onSaveEdit}>
             <IconCheck size={15} /> Save
-          </button>
-          <button type="button" className="action-btn2" onClick={onCancelEdit}>
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onCancelEdit}>
             Cancel
-          </button>
+          </Button>
         </div>
       </li>
     );
@@ -1530,29 +1614,42 @@ export function AdminSpotRow({
       <div className="admin-row-actions">
         {pending && canApprove !== false && (
           <>
-            <button type="button" className="action-btn" onClick={onApprove}>
+            <Button type="button" size="sm" onClick={onApprove}>
               <IconCheck size={15} /> Approve
-            </button>
-            <button type="button" className="action-btn reject" onClick={onReject}>
+            </Button>
+            <Button type="button" size="sm" variant="destructive" onClick={onReject}>
               <IconX size={15} /> Reject
-            </button>
+            </Button>
           </>
         )}
         {canModerate !== false && (
           <>
-            <button type="button" className="action-btn2" onClick={() => onStartEdit(spot)}>
-              Edit
-            </button>
-            <button
+            <Button
               type="button"
-              className="action-btn2"
+              size="sm"
+              variant="outline"
+              onClick={() => onStartEdit(spot)}
+            >
+              Edit
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
               onClick={onToggleHidden}
             >
               {spot.hidden ? "Restore" : "Hide"}
-            </button>
-            <button type="button" className="icon-btn danger" onClick={onDestroy} aria-label="Destroy spot">
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={onDestroy}
+              aria-label="Destroy spot"
+            >
               <IconTrash size={16} />
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -1592,13 +1689,13 @@ export function ZoneAdminRow({
       <li className="admin-spot edit">
         <div className="admin-edit-grid">
           <AdminField label="Name">
-            <input
+            <Input
               value={editZone.name}
               onChange={(e) => onEditChange({ ...editZone, name: e.target.value })}
             />
           </AdminField>
           <AdminField label="Description">
-            <input
+            <Input
               value={editZone.description ?? ""}
               onChange={(e) =>
                 onEditChange({ ...editZone, description: e.target.value })
@@ -1607,12 +1704,12 @@ export function ZoneAdminRow({
           </AdminField>
         </div>
         <div className="admin-row-actions">
-          <button type="button" className="action-btn" onClick={onSaveEdit}>
+          <Button type="button" size="sm" onClick={onSaveEdit}>
             <IconCheck size={15} /> Save
-          </button>
-          <button type="button" className="action-btn2" onClick={onCancelEdit}>
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onCancelEdit}>
             Cancel
-          </button>
+          </Button>
         </div>
       </li>
     );
@@ -1643,28 +1740,35 @@ export function ZoneAdminRow({
       <div className="admin-row-actions">
         {pending && (
           <>
-            <button type="button" className="action-btn" onClick={onApprove}>
+            <Button type="button" size="sm" onClick={onApprove}>
               <IconCheck size={15} /> Approve
-            </button>
-            <button type="button" className="action-btn reject" onClick={onReject}>
+            </Button>
+            <Button type="button" size="sm" variant="destructive" onClick={onReject}>
               <IconX size={15} /> Reject
-            </button>
+            </Button>
           </>
         )}
-        <button type="button" className="action-btn2" onClick={() => onStartEdit(zone)}>
-          Edit
-        </button>
-        <button type="button" className="action-btn2" onClick={onToggleHidden}>
-          {zone.hidden ? "Restore" : "Hide"}
-        </button>
-        <button
+        <Button
           type="button"
-          className="icon-btn danger"
+          size="sm"
+          variant="outline"
+          onClick={() => onStartEdit(zone)}
+        >
+          Edit
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
+          {zone.hidden ? "Restore" : "Hide"}
+        </Button>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
           onClick={onDestroy}
           aria-label="Destroy zone"
         >
           <IconTrash size={16} />
-        </button>
+        </Button>
       </div>
     </li>
   );
@@ -1702,13 +1806,13 @@ export function RouteAdminRow({
       <li className="admin-spot edit">
         <div className="admin-edit-grid">
           <AdminField label="Name">
-            <input
+            <Input
               value={editRoute.name}
               onChange={(e) => onEditChange({ ...editRoute, name: e.target.value })}
             />
           </AdminField>
           <AdminField label="Description">
-            <input
+            <Input
               value={editRoute.description ?? ""}
               onChange={(e) =>
                 onEditChange({ ...editRoute, description: e.target.value })
@@ -1717,12 +1821,12 @@ export function RouteAdminRow({
           </AdminField>
         </div>
         <div className="admin-row-actions">
-          <button type="button" className="action-btn" onClick={onSaveEdit}>
+          <Button type="button" size="sm" onClick={onSaveEdit}>
             <IconCheck size={15} /> Save
-          </button>
-          <button type="button" className="action-btn2" onClick={onCancelEdit}>
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onCancelEdit}>
             Cancel
-          </button>
+          </Button>
         </div>
       </li>
     );
@@ -1751,28 +1855,35 @@ export function RouteAdminRow({
       <div className="admin-row-actions">
         {pending && (
           <>
-            <button type="button" className="action-btn" onClick={onApprove}>
+            <Button type="button" size="sm" onClick={onApprove}>
               <IconCheck size={15} /> Approve
-            </button>
-            <button type="button" className="action-btn reject" onClick={onReject}>
+            </Button>
+            <Button type="button" size="sm" variant="destructive" onClick={onReject}>
               <IconX size={15} /> Reject
-            </button>
+            </Button>
           </>
         )}
-        <button type="button" className="action-btn2" onClick={() => onStartEdit(route)}>
-          Edit
-        </button>
-        <button type="button" className="action-btn2" onClick={onToggleHidden}>
-          {route.hidden ? "Restore" : "Hide"}
-        </button>
-        <button
+        <Button
           type="button"
-          className="icon-btn danger"
+          size="sm"
+          variant="outline"
+          onClick={() => onStartEdit(route)}
+        >
+          Edit
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
+          {route.hidden ? "Restore" : "Hide"}
+        </Button>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
           onClick={onDestroy}
           aria-label="Destroy route"
         >
           <IconTrash size={16} />
-        </button>
+        </Button>
       </div>
     </li>
   );
@@ -1780,7 +1891,7 @@ export function RouteAdminRow({
 
 export function AdminField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="admin-field">
+    <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted-foreground">
       <span>{label}</span>
       {children}
     </label>

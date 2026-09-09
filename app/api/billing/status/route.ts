@@ -6,7 +6,7 @@ import {
   getUserProfile,
   isPaidProfile,
 } from "@/lib/billing";
-import { getProPriceId, getStripe } from "@/lib/stripe";
+import { getPaddle, getProPriceId } from "@/lib/paddle";
 
 // GET /api/billing/status -> the signed-in user's plan + public-map quota.
 // The admin panel uses this to render the upgrade prompt and gate the private
@@ -29,6 +29,6 @@ export async function GET(req: Request) {
     subscriptionStatus: profile.subscriptionStatus ?? null,
     publicMapCount,
     freePublicLimit: FREE_PUBLIC_MAP_LIMIT,
-    stripeConfigured: Boolean(getStripe() && priceId),
+    paddleConfigured: Boolean(getPaddle() && priceId),
   });
 }

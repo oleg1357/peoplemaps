@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "./globals.css";
 import "./styles/base.css";
 import "./styles/nav.css";
 import "./styles/components.css";
@@ -22,6 +23,10 @@ import {
   SITE_OG_IMAGE,
   siteUrl,
 } from "@/lib/site";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const origin = siteUrl();
 
@@ -96,7 +101,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <head>
         <link rel="preconnect" href="https://a.tile.openstreetmap.org" />
         <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />

@@ -29,7 +29,7 @@ Both modes share the same UI components; the `backendLive` flag in `lib/api-clie
 - Measurement tools: click-to-measure distance and area straight on the map (transient, nothing saved) with segment labels, a follow-mouse preview, metric/imperial units, and "save as zone/route"
 - Per-map configuration: category + tags for discovery, collaboration modes (anyone / logged-in / owner & moderators only), clustering, welcome message and add-spot instructions, contact/website links
 - Moderation: map owners and moderators can approve, reject, hide or destroy spots, zones and routes; report and ban systems; an activity/audit log
-- Billing: free users can create up to 3 public maps (private maps gated to Pro subscribers) with Stripe Checkout + billing portal
+- Billing: free users can create up to 3 public maps (private maps gated to Pro subscribers) with Paddle hosted checkout + customer billing portal
 - Cover images per map, permalink slugs and a public profile / "my contributions" page
 - Home-page discovery with category filtering
 - Light/dark theme

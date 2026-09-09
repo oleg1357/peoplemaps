@@ -4,6 +4,11 @@ import type { Spot, SpotStatus, Review, ReviewComment, SpotPhoto, SpotPhotoMeta 
 import { backendLive } from "@/lib/api-client";
 import { MARKER_PRESETS, getMarkerColor } from "@/lib/markers";
 import { reportSpot } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { selectInputCls } from "@/lib/utils";
+import { cn } from "cn";
 
 export interface SpotDetailBundle {
   reviews: Array<Review & { author: string; comments: Array<ReviewComment & { author: string }> }>;
@@ -152,24 +157,43 @@ export function SpotDetailPanel({
   };
 
   return (
-    <div id="details">
-      <div className="details-top">
-        <button type="button" id="closeDetails" className="close-btn" onClick={onClose}>
+    <div
+      id="details"
+      className="absolute right-4 top-4 z-[9999] flex max-h-[calc(100vh-var(--header-h)-32px)] w-[380px] flex-col overflow-hidden rounded-[var(--radius-lg)] bg-surface text-ink shadow-(--shadow-lg)"
+    >
+      <div className="relative border-b border-border bg-surface-2 px-5 py-[18px]">
+        <button
+          type="button"
+          id="closeDetails"
+          className="absolute top-3 right-3.5 rounded-md border-none bg-ink/5 px-3 py-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-ink/10 hover:text-ink"
+          onClick={onClose}
+        >
           Close
         </button>
-        <div className="flex">
-          <h2 style={{ margin: 0 }}>{selected.name}</h2>
+        <div className="flex items-center justify-end py-1.5">
+          <h2 className="mt-0 mb-0 flex items-center gap-2.5 pr-[70px] text-[1.25em] font-bold leading-tight">
+            {selected.name}
+          </h2>
         </div>
-        <p style={{ margin: "6px 0 0" }}>
+        <p className="mt-1.5 mb-0 text-muted-foreground">
           {selected.street || "No address"} {selected.city && `, ${selected.city}`}
         </p>
-        <div className="status-row">
-          <div className="status-control">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="inline-flex gap-0.5 rounded-none bg-chip p-[3px]">
             {(["open", "closed", "unknown"] as SpotStatus[]).map((s) => (
               <button
                 key={s}
                 type="button"
-                className={`status-btn ${s} ${status === s ? "active" : ""}`}
+                className={cn(
+                  "cursor-pointer rounded-none border-none bg-transparent px-3 py-[5px] text-[12.5px] font-semibold text-muted-foreground transition-colors",
+                  status === s
+                    ? s === "open"
+                      ? "bg-green text-white hover:text-white"
+                      : s === "closed"
+                        ? "bg-(--danger-2) text-white hover:text-white"
+                        : "bg-muted-foreground text-white hover:text-white"
+                    : "hover:text-ink"
+                )}
                 onClick={() => onStatus(s)}
               >
                 {s === "open" ? "Open" : s === "closed" ? "Closed" : "Unknown"}
@@ -181,19 +205,22 @@ export function SpotDetailPanel({
         selected.hoursNote ||
         (selected.tags && selected.tags.length > 0) ||
         selected.tip ? (
-          <div className="spot-meta">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
             {selected.priceLevel !== undefined && selected.priceLevel !== null && (
-              <span className="spot-meta-item" title="Price level">
+              <span className="inline-flex items-center gap-1.5" title="Price level">
                 {"$".repeat(Math.max(1, selected.priceLevel + 1))}
               </span>
             )}
             {selected.hoursNote && (
-              <span className="spot-meta-item">🕒 {selected.hoursNote}</span>
+              <span className="inline-flex items-center gap-1.5">🕒 {selected.hoursNote}</span>
             )}
             {selected.tags && selected.tags.length > 0 && (
-              <span className="spot-meta-item">
+              <span className="inline-flex flex-wrap items-center gap-1.5">
                 {selected.tags.map((t) => (
-                  <span key={t} className="spot-tag">
+                  <span
+                    key={t}
+                    className="inline-block rounded-none border border-border bg-chip px-2 py-[1px] text-xs"
+                  >
                     {t}
                   </span>
                 ))}
@@ -203,63 +230,93 @@ export function SpotDetailPanel({
           </div>
         ) : null}
         {userId && selected.createdBy === userId && (
-          <div className="status-row" style={{ gap: 8 }}>
-            <button
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <Button
               type="button"
-              className="link-btn"
+              variant="ghost"
+              size="sm"
+              className="text-green-dark hover:bg-green/10 hover:text-green-dark"
               onClick={() => (editingSpot ? setEditingSpot(false) : startEditSpot(selected))}
             >
               {editingSpot ? "Cancel" : "Edit spot"}
-            </button>
-            <button type="button" className="link-btn danger" onClick={handleDeleteSpot}>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleDeleteSpot}
+            >
               Delete
-            </button>
+            </Button>
           </div>
         )}
         {userId && selected.createdBy !== userId && (
-          <div className="status-row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {reporting ? (
               <>
-                <input
+                <Input
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
                   placeholder="Reason…"
-                  style={{ flex: 1, minWidth: 140 }}
+                  className="min-w-[140px] flex-1"
                 />
-                <button type="button" className="link-btn" onClick={handleReport}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-dark hover:bg-green/10 hover:text-green-dark"
+                  onClick={handleReport}
+                >
                   Submit report
-                </button>
-                <button type="button" className="link-btn" onClick={() => setReporting(false)}>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setReporting(false)}
+                >
                   Cancel
-                </button>
+                </Button>
               </>
             ) : (
-              <button type="button" className="link-btn" onClick={() => setReporting(true)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-green-dark hover:bg-green/10 hover:text-green-dark"
+                onClick={() => setReporting(true)}
+              >
                 {reportDone ? "Reported ✓" : "Report"}
-              </button>
+              </Button>
             )}
           </div>
         )}
       </div>
 
-      <div id="details-content">
+      <div id="details-content" className="overflow-y-auto p-5">
         {editingSpot ? (
-          <form onSubmit={handleSaveOwnSpot} className="map-draw-card" style={{ position: "static", width: "auto" }}>
-            <strong>Edit spot</strong>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Spot name" />
-            <input value={editStreet} onChange={(e) => setEditStreet(e.target.value)} placeholder="Street" />
-            <input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="City" />
-            <input
+          <form
+            onSubmit={handleSaveOwnSpot}
+            className="flex w-auto flex-col gap-2.5 border border-border bg-surface p-4 text-ink shadow-(--shadow-lg)"
+          >
+            <strong className="text-[15px] font-bold">Edit spot</strong>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Spot name" />
+            <Input value={editStreet} onChange={(e) => setEditStreet(e.target.value)} placeholder="Street" />
+            <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="City" />
+            <Input
               value={editZip}
               type="number"
               onChange={(e) => setEditZip(Number(e.target.value))}
               placeholder="Zip"
             />
-            <div className="spot-form-grid">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <select
                 value={editPriceLevel === null ? "" : editPriceLevel}
                 onChange={(e) => setEditPriceLevel(e.target.value ? Number(e.target.value) : null)}
                 title="Price level"
+                className={selectInputCls}
               >
                 <option value="">Price (optional)</option>
                 <option value="0">$ — cheap</option>
@@ -267,9 +324,9 @@ export function SpotDetailPanel({
                 <option value="2">$$$ — upscale</option>
                 <option value="3">$$$$ — premium</option>
               </select>
-              <input value={editHoursNote} onChange={(e) => setEditHoursNote(e.target.value)} placeholder="Hours (e.g. Mon–Fri 08:00–18:00)" />
-              <input value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)} placeholder="Tags (comma separated)" />
-              <textarea value={editTip} onChange={(e) => setEditTip(e.target.value)} rows={2} placeholder="Insider tip (e.g. best time to visit)" />
+              <Input value={editHoursNote} onChange={(e) => setEditHoursNote(e.target.value)} placeholder="Hours (e.g. Mon–Fri 08:00–18:00)" />
+              <Input value={editTagsText} onChange={(e) => setEditTagsText(e.target.value)} placeholder="Tags (comma separated)" />
+              <Textarea value={editTip} onChange={(e) => setEditTip(e.target.value)} rows={2} placeholder="Insider tip (e.g. best time to visit)" className="col-span-2" />
             </div>
             <div className="marker-picker-inline">
               {MARKER_PRESETS.map((m) => (
@@ -293,11 +350,11 @@ export function SpotDetailPanel({
                 title="Custom color"
               />
             </div>
-            {editSpotError && <span className="map-error">{editSpotError}</span>}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button type="submit" className="action-btn2" disabled={!editName.trim()}>
+            {editSpotError && <span className="text-[13px] text-destructive">{editSpotError}</span>}
+            <div className="flex items-center gap-2">
+              <Button type="submit" disabled={!editName.trim()}>
                 Save changes
-              </button>
+              </Button>
             </div>
           </form>
         ) : !editing ? (
@@ -306,94 +363,109 @@ export function SpotDetailPanel({
               <p className="italic muted">Reviews are disabled for this map.</p>
             ) : (
               <>
-                <h3>Add a review</h3>
-                <textarea
+                <h3 className="mt-0 mb-2 text-base font-bold">Add a review</h3>
+                <Textarea
                   value={reviewText}
                   onChange={(e) => setReviewText(e.target.value)}
                   placeholder="How was your visit?"
                   rows={2}
-                  style={{ width: "100%" }}
+                  className="w-full"
                 />
-                <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "8px 0" }}>
-                  <span>Score</span>
-                  <select value={reviewScore} onChange={(e) => setReviewScore(Number(e.target.value))}>
+                <div className="my-2 flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Score</span>
+                  <select value={reviewScore} onChange={(e) => setReviewScore(Number(e.target.value))} className={cn(selectInputCls, "w-auto")}>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <option key={n} value={n}>
                         {n}
                       </option>
                     ))}
                   </select>
-                  <button type="button" className="action-btn2" onClick={handleSaveReview}>
+                  <Button type="button" variant="outline" size="sm" onClick={handleSaveReview}>
                     Submit review
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
 
-            <div id="reviews-box">
+            <div id="reviews-box" className="max-h-80 overflow-y-auto">
               {bundle.avgScore !== null && (
-                <div className="avg-rating">
-                  <span className="avg-rating-score">
+                <div className="mb-3.5 flex items-center gap-2.5 border border-border bg-chip p-2.5">
+                  <span className="text-xl font-bold text-ink">
                     {bundle.avgScore.toFixed(1)}
                   </span>
-                  <span className="avg-rating-stars">
+                  <span className="inline-flex gap-px text-base">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <span
                         key={n}
-                        className={n <= Math.round(bundle.avgScore as number) ? "on" : ""}
+                        className={n <= Math.round(bundle.avgScore as number) ? "text-warning" : "text-border"}
                       >
                         ★
                       </span>
                     ))}
                   </span>
-                  <span className="avg-rating-count">
+                  <span className="text-xs text-muted-foreground">
                     from {bundle.reviews.length} review{bundle.reviews.length === 1 ? "" : "s"}
                   </span>
                 </div>
               )}
               {bundle.reviews.map((r) => (
-                <div id="reviews" key={r._id}>
+                <div id="reviews" key={r._id} className="border-t border-border py-3 text-right">
                   <div className="review-head">
                     <span className="review-score">{r.score}/5</span>
                     <span className="review-author">{r.author}</span>
-                    <span id="review-date">{r.date}</span>
+                    <span id="review-date" className="text-xs text-muted-foreground">{r.date}</span>
                   </div>
-                  <p style={{ margin: "6px 0" }}>{r.review || <span className="italic">No review</span>}</p>
-                  <div className="review-actions">
+                  <p className="mt-1.5 mb-0">{r.review || <span className="italic">No review</span>}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
                     <button
                       type="button"
-                      className={`helpful-btn ${r.voted ? "voted" : ""}`}
+                      className={cn(
+                        "inline-flex cursor-pointer items-center gap-1 rounded-none border bg-chip px-2.5 py-1 text-xs font-semibold transition-colors",
+                        r.voted
+                          ? "border-green/40 bg-green/15 text-green-dark"
+                          : "border-transparent text-muted-foreground hover:text-green-dark"
+                      )}
                       onClick={() => r._id && handleVote(r._id)}
                     >
                       Helpful{r.helpfulCount ? ` (${r.helpfulCount})` : ""}
                     </button>
                     {r._id && allowComments !== false && (
-                      <button
+                      <Button
                         type="button"
-                        className="link-btn"
+                        variant="ghost"
+                        size="sm"
+                        className="text-green-dark hover:bg-green/10 hover:text-green-dark"
                         onClick={() =>
                           setReplyTarget({ reviewId: r._id as string, commentId: null })
                         }
                       >
                         Reply
-                      </button>
+                      </Button>
                     )}
                     {r._id && Boolean(userId) && r.user_fk === userId && (
-                      <button
+                      <Button
                         type="button"
-                        className="link-btn"
+                        variant="ghost"
+                        size="sm"
+                        className="text-green-dark hover:bg-green/10 hover:text-green-dark"
                         onClick={() => setEditing({ id: r._id as string, review: r.review, score: r.score })}
                       >
                         Edit
-                      </button>
+                      </Button>
                     )}
                     {r._id && Boolean(userId) && r.user_fk === userId && (
-                      <button type="button" className="link-btn danger" onClick={() => handleDeleteReview(r._id!)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => handleDeleteReview(r._id!)}
+                      >
                         Delete
-                      </button>
+                      </Button>
                     )}
                   </div>
-                  <div className="comments-section">
+                  <div className="mt-2.5 border border-border bg-surface-2 p-2.5 text-left">
                     {(() => {
                       const byParent = new Map<
                         string,
@@ -421,26 +493,31 @@ export function SpotDetailPanel({
                         return (
                           <div
                             key={c._id}
-                            className={`comment ${depth > 0 ? "reply" : ""}`}
+                            className={cn(
+                              "mb-2 pb-2",
+                              depth === 0 && "border-b border-border"
+                            )}
                           >
-                            <div className="comment-head">
-                              <strong>{c.author}</strong>
-                              <span className="comment-date">{c.date}</span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <strong className="text-[12.5px] font-bold text-ink">{c.author}</strong>
+                              <span className="text-[11px] text-muted-foreground">{c.date}</span>
                               {mine && (
-                                <button
+                                <Button
                                   type="button"
-                                  className="link-btn danger"
+                                  variant="link"
+                                  className="h-auto p-0 text-xs text-destructive hover:text-destructive"
                                   onClick={() => c._id && handleDeleteComment(c._id)}
                                 >
                                   Delete
-                                </button>
+                                </Button>
                               )}
                             </div>
-                            <p className="comment-text">{c.text}</p>
+                            <p className="mt-0.5 mb-0 text-[13px] text-ink">{c.text}</p>
                             {r._id && allowComments !== false && (
-                              <button
+                              <Button
                                 type="button"
-                                className="link-btn comment-reply-btn"
+                                variant="link"
+                                className="mt-0.5 h-auto p-0 text-xs"
                                 onClick={() =>
                                   setReplyTarget({
                                     reviewId: r._id as string,
@@ -449,13 +526,13 @@ export function SpotDetailPanel({
                                 }
                               >
                                 Reply
-                              </button>
+                              </Button>
                             )}
                             {r._id &&
                               replyTarget?.reviewId === r._id &&
                               replyTarget.commentId === c._id && (
-                                <div className="add-comment">
-                                  <input
+                                <div className="mt-2 flex gap-2">
+                                  <Input
                                     autoFocus
                                     value={commentDrafts[key] || ""}
                                     onChange={(e) =>
@@ -468,20 +545,22 @@ export function SpotDetailPanel({
                                       }
                                     }}
                                     placeholder="Write a reply…"
+                                    className="h-9 flex-1 text-[13px]"
                                   />
-                                  <button
+                                  <Button
                                     type="button"
-                                    className="link-btn"
+                                    variant="link"
+                                    className="h-auto p-0 text-xs"
                                     onClick={() =>
                                       handleComment(r._id as string, c._id ?? null)
                                     }
                                   >
                                     Reply
-                                  </button>
+                                  </Button>
                                 </div>
                               )}
                             {children.length > 0 && (
-                              <div className="comment-nested">
+                              <div className="mt-2.5 ml-4 border-l-2 border-border pl-3">
                                 {children.map((ch) =>
                                   renderComment(ch, depth + 1)
                                 )}
@@ -494,15 +573,15 @@ export function SpotDetailPanel({
                         <>
                           {roots.map((c) => renderComment(c, 0))}
                           {r.comments.length === 0 && (
-                            <p className="italic muted">
+                            <p className="italic muted mt-0 mb-0">
                               No comments yet.
                             </p>
                           )}
                           {r._id &&
                             replyTarget?.reviewId === r._id &&
                             replyTarget.commentId === null && (
-                              <div className="add-comment">
-                                <input
+                              <div className="mt-2 flex gap-2">
+                                <Input
                                   autoFocus
                                   value={commentDrafts[`${r._id}:root`] || ""}
                                   onChange={(e) =>
@@ -518,14 +597,16 @@ export function SpotDetailPanel({
                                     }
                                   }}
                                   placeholder="Write a reply…"
+                                  className="h-9 flex-1 text-[13px]"
                                 />
-                                <button
+                                <Button
                                   type="button"
-                                  className="link-btn"
+                                  variant="link"
+                                  className="h-auto p-0 text-xs"
                                   onClick={() => handleComment(r._id as string, null)}
                                 >
                                   Reply
-                                </button>
+                                </Button>
                               </div>
                             )}
                         </>
@@ -535,22 +616,23 @@ export function SpotDetailPanel({
                 </div>
               ))}
               {bundle.reviews.length === 0 && (
-                <p className="italic">No reviews yet — be the first!</p>
+                <p className="italic mb-0">No reviews yet — be the first!</p>
               )}
             </div>
           </>
         ) : (
           <div>
-            <h3>Edit review</h3>
-            <textarea
+            <h3 className="mt-0 mb-2 text-base font-bold">Edit review</h3>
+            <Textarea
               value={editing.review}
               onChange={(e) => setEditing({ ...editing, review: e.target.value })}
               rows={2}
-              style={{ width: "100%" }}
+              className="w-full"
             />
             <select
               value={editing.score}
               onChange={(e) => setEditing({ ...editing, score: Number(e.target.value) })}
+              className={cn(selectInputCls, "my-2 w-auto")}
             >
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
@@ -558,17 +640,28 @@ export function SpotDetailPanel({
                 </option>
               ))}
             </select>
-            <button type="button" className="action-btn2" onClick={() => handleEditReview(editing.id, editing.review, editing.score)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleEditReview(editing.id, editing.review, editing.score)}
+            >
               Save
-            </button>
-            <button type="button" className="link-btn" onClick={() => setEditing(null)}>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setEditing(null)}
+            >
               Cancel
-            </button>
+            </Button>
           </div>
         )}
 
-        <h3 style={{ marginTop: 16 }}>Photos ({bundle.photos.length})</h3>
-        <div className="photos-grid">
+        <h3 className="mt-4 mb-2 text-base font-bold">Photos ({bundle.photos.length})</h3>
+        <div className="flex flex-wrap gap-2">
           {(() => {
             if (backendLive) {
               const loaded = selected?._id ? spotPhotos[selected._id] ?? [] : [];
@@ -576,19 +669,19 @@ export function SpotDetailPanel({
                 return <span className="italic">Loading photos…</span>;
               }
               return loaded.map((p) => (
-                <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
+                <img key={p._id} src={p.dataUrl} alt="spot" className="h-[88px] w-[88px] rounded-none border border-border object-cover shadow-(--shadow-sm)" />
               ));
             }
             // Demo mode: mapData.photos already carry the image bytes.
             return (bundle.photos as SpotPhoto[]).map((p) => (
-              <img key={p._id} src={p.dataUrl} alt="spot" className="spot-photo" />
+              <img key={p._id} src={p.dataUrl} alt="spot" className="h-[88px] w-[88px] rounded-none border border-border object-cover shadow-(--shadow-sm)" />
             ));
           })()}
         </div>
         {allowPhotos === false ? (
           <p className="italic muted">Photo uploads are disabled for this map.</p>
         ) : (
-          <input type="file" accept="image/*" onChange={handlePhoto} />
+          <Input type="file" accept="image/*" onChange={handlePhoto} className="mt-2 max-w-[280px]" />
         )}
       </div>
     </div>

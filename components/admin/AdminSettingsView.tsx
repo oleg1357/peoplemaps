@@ -14,12 +14,56 @@ import {
   getMarkerColor,
 } from "@/lib/markers";
 import { IconTrash } from "../icons";
-import { MarkerPicker, AdminField } from "../AdminPanel";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { MarkerPicker, AdminField, selectInputCls } from "../AdminPanel";
 import { coverImageUrl } from "@/sanity/lib/images";
 import AutoModerationSection from "./AutoModerationSection";
 import type { MapDocument } from "@/lib/types";
 
 const DEFAULT_BASE = { lat: 55.6761, lng: 12.5683 };
+
+function SettingsGroup({
+  title,
+  children,
+  cols = 2,
+}: {
+  title: string;
+  children: React.ReactNode;
+  cols?: 1 | 2;
+}) {
+  return (
+    <div
+      className={`mt-3 grid gap-2.5 rounded-lg border bg-muted/40 p-4 ${
+        cols === 1 ? "grid-cols-1" : "grid-cols-2"
+      }`}
+    >
+      <div className="col-span-full mb-1 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ToggleRow({
+  checked,
+  onCheckedChange,
+  label,
+}: {
+  checked: boolean;
+  onCheckedChange: (c: boolean) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm font-medium">{label}</span>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+    </div>
+  );
+}
 
 export default function AdminSettingsView({
   draft,
@@ -74,51 +118,59 @@ export default function AdminSettingsView({
 
   return (
     <>
-    <form className="admin-section" onSubmit={onSubmit}>
-      <h3>Map settings</h3>
-      <div className="admin-panel-group">
-        <h4>Cover image</h4>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <form className="mt-4" onSubmit={onSubmit}>
+      <h3 className="mb-1 font-heading text-lg font-semibold">Map settings</h3>
+      <SettingsGroup title="Cover image">
+        <div className="col-span-full flex flex-wrap items-center gap-3">
           {coverUrl ? (
             <img
               src={coverUrl}
               alt="Cover"
-              style={{ width: 120, height: 80, objectFit: "cover", border: "1px solid var(--border)" }}
+              className="h-20 w-30 rounded-lg border object-cover"
             />
           ) : (
-            <span className="muted">No cover image yet.</span>
+            <span className="text-sm text-muted-foreground">No cover image yet.</span>
           )}
           {backendLive && (
             <>
-              <label className="action-btn2" style={{ cursor: "pointer" }}>
+              <label
+                className={`${buttonVariants({
+                  variant: "outline",
+                  size: "sm",
+                })} cursor-pointer`}
+              >
                 {coverUploading ? "Uploading…" : coverUrl ? "Replace" : "Upload"}
                 <input
                   type="file"
                   accept="image/*"
-                  style={{ display: "none" }}
+                  className="hidden"
                   disabled={coverUploading}
                   onChange={handleCoverUpload}
                 />
               </label>
               {coverUrl && (
-                <button type="button" className="action-btn2 danger" onClick={handleCoverRemove}>
+                <Button type="button" size="sm" variant="outline" onClick={handleCoverRemove}>
                   Remove
-                </button>
+                </Button>
               )}
             </>
           )}
         </div>
-        {coverMsg && <p className="muted">{coverMsg}</p>}
-      </div>
-      <div className="admin-edit-grid">
+        {coverMsg && (
+          <p className="col-span-full text-sm text-muted-foreground">{coverMsg}</p>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup title="Basics">
         <AdminField label="Title">
-          <input
+          <Input
             value={draft.title ?? ""}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
           />
         </AdminField>
         <AdminField label="Visibility">
           <select
+            className={selectInputCls}
             value={draft.isPublic ?? "public"}
             onChange={(e) =>
               setDraft({
@@ -132,7 +184,7 @@ export default function AdminSettingsView({
           </select>
         </AdminField>
         <AdminField label="Description">
-          <input
+          <Input
             value={draft.description ?? ""}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
@@ -156,9 +208,9 @@ export default function AdminSettingsView({
             />
           </div>
         </AdminField>
-      </div>
+      </SettingsGroup>
 
-      <div className="admin-panel-group">
+      <div className="mt-3 rounded-lg border bg-muted/40 p-4">
         <MarkerPicker
           emoji={draft.defaultMarker ?? DEFAULT_MARKER.emoji}
           color={draft.defaultMarkerColor ?? DEFAULT_MARKER.color}
@@ -167,10 +219,9 @@ export default function AdminSettingsView({
         />
       </div>
 
-      <div className="admin-panel-group">
-        <h4>Behavior</h4>
+      <SettingsGroup title="Behavior">
         <AdminField label="Default map center (lat)">
-          <input
+          <Input
             type="number"
             step="any"
             value={draft.baseCenter?.lat ?? DEFAULT_BASE.lat}
@@ -186,7 +237,7 @@ export default function AdminSettingsView({
           />
         </AdminField>
         <AdminField label="Default map center (lng)">
-          <input
+          <Input
             type="number"
             step="any"
             value={draft.baseCenter?.lng ?? DEFAULT_BASE.lng}
@@ -202,7 +253,7 @@ export default function AdminSettingsView({
           />
         </AdminField>
         <AdminField label="Default zoom">
-          <input
+          <Input
             type="number"
             min={3}
             max={18}
@@ -211,7 +262,7 @@ export default function AdminSettingsView({
           />
         </AdminField>
         <AdminField label="Max photos per spot (0-12)">
-          <input
+          <Input
             type="number"
             min={0}
             max={12}
@@ -221,16 +272,16 @@ export default function AdminSettingsView({
             }
           />
         </AdminField>
-        <label className="admin-check">
-          <input
-            type="checkbox"
+        <div className="col-span-full">
+          <ToggleRow
             checked={draft.requireApproval ?? true}
-            onChange={(e) => setDraft({ ...draft, requireApproval: e.target.checked })}
+            onCheckedChange={(c) => setDraft({ ...draft, requireApproval: c })}
+            label="Require your approval for new spots"
           />
-          Require your approval for new spots
-        </label>
+        </div>
         <AdminField label="Who can add spots">
           <select
+            className={selectInputCls}
             value={draft.collaborationMode ?? "loggedIn"}
             onChange={(e) =>
               setDraft({
@@ -247,12 +298,12 @@ export default function AdminSettingsView({
             <option value="invitedOnly">Owner &amp; moderators only</option>
           </select>
         </AdminField>
-      </div>
+      </SettingsGroup>
 
-      <div className="admin-panel-group">
-        <h4>Discovery</h4>
+      <SettingsGroup title="Discovery">
         <AdminField label="Category">
           <select
+            className={selectInputCls}
             value={draft.category ?? ""}
             onChange={(e) => setDraft({ ...draft, category: e.target.value })}
           >
@@ -268,54 +319,40 @@ export default function AdminSettingsView({
           </select>
         </AdminField>
         <AdminField label="Tags">
-          <input
+          <Input
             value={draft.tags ?? ""}
             onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
             placeholder="e.g. hidden gems, family friendly, dog friendly"
           />
         </AdminField>
-      </div>
+      </SettingsGroup>
 
-      <div className="admin-panel-group">
-        <h4>Content toggles</h4>
-        <label className="admin-check">
-          <input
-            type="checkbox"
-            checked={draft.allowReviews ?? true}
-            onChange={(e) => setDraft({ ...draft, allowReviews: e.target.checked })}
-          />
-          Allow visitors to add reviews
-        </label>
-        <label className="admin-check">
-          <input
-            type="checkbox"
-            checked={draft.allowComments ?? true}
-            onChange={(e) => setDraft({ ...draft, allowComments: e.target.checked })}
-          />
-          Allow visitors to comment on reviews
-        </label>
-        <label className="admin-check">
-          <input
-            type="checkbox"
-            checked={draft.allowPhotos ?? true}
-            onChange={(e) => setDraft({ ...draft, allowPhotos: e.target.checked })}
-          />
-          Allow visitors to upload photos
-        </label>
-        <label className="admin-check">
-          <input
-            type="checkbox"
-            checked={draft.enableClustering ?? false}
-            onChange={(e) => setDraft({ ...draft, enableClustering: e.target.checked })}
-          />
-          Cluster nearby markers on the map
-        </label>
-      </div>
+      <SettingsGroup title="Content toggles" cols={1}>
+        <ToggleRow
+          checked={draft.allowReviews ?? true}
+          onCheckedChange={(c) => setDraft({ ...draft, allowReviews: c })}
+          label="Allow visitors to add reviews"
+        />
+        <ToggleRow
+          checked={draft.allowComments ?? true}
+          onCheckedChange={(c) => setDraft({ ...draft, allowComments: c })}
+          label="Allow visitors to comment on reviews"
+        />
+        <ToggleRow
+          checked={draft.allowPhotos ?? true}
+          onCheckedChange={(c) => setDraft({ ...draft, allowPhotos: c })}
+          label="Allow visitors to upload photos"
+        />
+        <ToggleRow
+          checked={draft.enableClustering ?? false}
+          onCheckedChange={(c) => setDraft({ ...draft, enableClustering: c })}
+          label="Cluster nearby markers on the map"
+        />
+      </SettingsGroup>
 
-      <div className="admin-panel-group">
-        <h4>Contact &amp; links</h4>
+      <SettingsGroup title="Contact &amp; links">
         <AdminField label="Contact email">
-          <input
+          <Input
             type="email"
             value={draft.contactEmail ?? ""}
             onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })}
@@ -323,19 +360,18 @@ export default function AdminSettingsView({
           />
         </AdminField>
         <AdminField label="Website">
-          <input
+          <Input
             type="url"
             value={draft.website ?? ""}
             onChange={(e) => setDraft({ ...draft, website: e.target.value })}
             placeholder="https://example.com"
           />
         </AdminField>
-      </div>
+      </SettingsGroup>
 
-      <div className="admin-panel-group">
-        <h4>Text for visitors</h4>
+      <SettingsGroup title="Text for visitors" cols={1}>
         <AdminField label="Welcome message">
-          <textarea
+          <Textarea
             rows={3}
             value={draft.welcomeMessage ?? ""}
             onChange={(e) => setDraft({ ...draft, welcomeMessage: e.target.value })}
@@ -343,47 +379,41 @@ export default function AdminSettingsView({
           />
         </AdminField>
         <AdminField label="Add-spot instructions">
-          <textarea
+          <Textarea
             rows={2}
             value={draft.submissionNote ?? ""}
             onChange={(e) => setDraft({ ...draft, submissionNote: e.target.value })}
             placeholder="Tip shown in the add-spot form, e.g. “Please include opening hours.”"
           />
         </AdminField>
-      </div>
+      </SettingsGroup>
 
-      {settingsError && <p className="auth-error">{settingsError}</p>}
+      {settingsError && <p className="mt-3 text-sm text-destructive">{settingsError}</p>}
       {settingsSaved && (
-        <p className="muted" style={{ color: "var(--green)" }}>
-          Settings saved.
-        </p>
+        <p className="mt-3 text-sm text-green-dark">Settings saved.</p>
       )}
-      <div className="admin-row-actions">
-        <button
-          type="submit"
-          className="action-btn"
-          disabled={savingSettings}
-        >
+      <div className="mt-4 flex items-center gap-2">
+        <Button type="submit" disabled={savingSettings}>
           {savingSettings ? "Saving…" : "Save settings"}
-        </button>
+        </Button>
       </div>
 
-      <div className="admin-danger-zone">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-destructive/35 bg-destructive/5 p-4">
         <div>
-          <strong>Danger zone</strong>
-          <p className="muted">
-            Delete the map, all its spots, reviews, photos and
-            comments. This cannot be undone.
+          <strong className="text-destructive">Danger zone</strong>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Delete the map, all its spots, reviews, photos and comments. This
+            cannot be undone.
           </p>
         </div>
-        <button type="button" className="action-btn danger" onClick={onDeleteMap}>
+        <Button type="button" variant="destructive" onClick={onDeleteMap}>
           <IconTrash size={15} /> Delete map
-        </button>
+        </Button>
       </div>
     </form>
 
     {backendLive && activeMap && (
-      <div className="admin-section">
+      <div className="mt-4">
         <AutoModerationSection mapId={activeMap._id} backendLive={backendLive} />
       </div>
     )}

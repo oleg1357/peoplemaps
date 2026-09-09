@@ -2,103 +2,78 @@ import { NextResponse } from "next/server";
 import { json } from "@/lib/api";
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { getUserProfile, upsertUserProfile } from "@/lib/billing";
-import { getStripe, getWebhookSecret } from "@/lib/stripe";
-import type { SubscriptionStatus, UserProfile } from "@/lib/types";
+import { getPaddle, getWebhookSecret } from "@/lib/paddle";
+import {
+  EventName,
+  type SubscriptionNotification,
+} from "@paddle/paddle-node-sdk";
+import type { SubscriptionStatus } from "@/lib/types";
 
-// POST /api/billing/webhook -> Stripe subscription lifecycle events. Grants and
+// POST /api/billing/webhook -> Paddle subscription lifecycle events. Grants and
 // revokes Pro access by writing the user's profile row in Mongo. Verify the
-// signature with STRIPE_WEBHOOK_SECRET (set with `stripe listen --forward-to`).
+// signature with PADDLE_WEBHOOK_SECRET (the webhook's signing key from Paddle's
+// dashboard or `paddle webhook simulate` during local development).
 export async function POST(req: Request) {
-  const stripe = getStripe();
+  const paddle = getPaddle();
   const secret = getWebhookSecret();
-  if (!stripe || !secret) {
+  if (!paddle || !secret) {
     return json(
       { error: "Billing webhook is not configured on this server." },
       { status: 503 }
     );
   }
 
-  const signature = req.headers.get("stripe-signature");
+  const signature = req.headers.get("paddle-signature");
   if (!signature) {
-    return json({ error: "Missing Stripe signature." }, { status: 400 });
+    return json({ error: "Missing Paddle signature." }, { status: 400 });
   }
 
-  let event: import("stripe").Stripe.Event;
+  let event: Awaited<ReturnType<typeof paddle.webhooks.unmarshal>>;
   try {
     const raw = await req.text();
-    event = stripe.webhooks.constructEvent(raw, signature, secret);
+    event = await paddle.webhooks.unmarshal(raw, secret, signature);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
-    return json({ error: `Webhook signature verification failed: ${message}` }, { status: 400 });
+    return json(
+      { error: `Webhook signature verification failed: ${message}` },
+      { status: 400 }
+    );
   }
 
   try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as import("stripe").Stripe.Checkout.Session;
-        if (session.mode !== "subscription" || !session.subscription) break;
-        const userId =
-          session.client_reference_id ||
-          (session.metadata?.userId as string | undefined);
-        const customer =
-          typeof session.customer === "string" ? session.customer : session.customer?.id;
-        const subscription = await stripe.subscriptions.retrieve(
-          session.subscription as string
-        );
-        const status = mapStatus(subscription.status);
-        const target = userId ?? (await profileIdForCustomer(customer));
-        if (target) {
-          const existing = await getUserProfile(target);
-          await upsertUserProfile(target, {
-            plan: isActive(status) ? "pro" : "free",
-            stripeCustomerId: customer,
-            stripeSubscriptionId: subscription.id,
-            subscriptionStatus: status,
-            proSince: isActive(status)
-              ? existing.proSince ?? new Date().toISOString()
-              : existing.proSince,
-          });
-        }
-        break;
-      }
-
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const sub = event.data.object as import("stripe").Stripe.Subscription;
-        const customer =
-          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-        const target = await profileIdForCustomer(customer);
-        if (!target) break;
+    switch (event.eventType) {
+      case EventName.SubscriptionCreated:
+      case EventName.SubscriptionUpdated:
+      case EventName.SubscriptionActivated:
+      case EventName.SubscriptionTrialing:
+      case EventName.SubscriptionResumed:
+      case EventName.SubscriptionPastDue:
+      case EventName.SubscriptionPaused:
+      case EventName.SubscriptionCanceled: {
+        const sub = event.data as SubscriptionNotification;
+        // Paddle copies the transaction's custom_data onto the subscription, so
+        // every lifecycle event tells us whose profile to update.
+        const userId = typeof sub.customData?.userId === "string"
+          ? sub.customData.userId
+          : await profileIdForCustomer(sub.customerId);
+        if (!userId) break;
         const status = mapStatus(sub.status);
-        const existing = await getUserProfile(target);
-        await upsertUserProfile(target, {
-          plan: isActive(status) ? "pro" : "free",
-          stripeCustomerId: customer,
-          stripeSubscriptionId: sub.id,
+        const active = isActive(status);
+        const existing = await getUserProfile(userId);
+        await upsertUserProfile(userId, {
+          plan: active ? "pro" : "free",
+          paddleCustomerId: sub.customerId,
+          paddleSubscriptionId: sub.id,
           subscriptionStatus: status,
-          proSince: isActive(status)
+          proSince: active
             ? existing.proSince ?? new Date().toISOString()
             : existing.proSince,
         });
         break;
       }
 
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as import("stripe").Stripe.Subscription;
-        const customer =
-          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-        const target = await profileIdForCustomer(customer);
-        if (!target) break;
-        await upsertUserProfile(target, {
-          plan: "free",
-          subscriptionStatus: "canceled",
-          stripeSubscriptionId: null,
-        });
-        break;
-      }
-
       default:
-        break; // ignore payment/renewal events; status tracks the subscription
+        break; // ignore invoice/payment events; status tracks the subscription
     }
   } catch (err) {
     console.error("billing webhook handler failed:", err);
@@ -113,9 +88,8 @@ function mapStatus(status: string | null): SubscriptionStatus {
     case "active":
     case "trialing":
     case "past_due":
-    case "incomplete":
+    case "paused":
     case "canceled":
-    case "unpaid":
       return status;
     default:
       return "canceled";
@@ -126,7 +100,8 @@ function isActive(status: SubscriptionStatus): boolean {
   return status === "active" || status === "trialing";
 }
 
-// Find the profile row that owns a Stripe customer id.
+// Find the profile row that owns a Paddle customer id (fallback when a webhook
+// arrives without usable custom_data).
 async function profileIdForCustomer(
   customer: string | null | undefined
 ): Promise<string | null> {
@@ -135,8 +110,8 @@ async function profileIdForCustomer(
     const db = await getDb();
     if (!db) return null;
     const row = await db
-      .collection<UserProfile>(COLLECTIONS.profiles)
-      .findOne({ stripeCustomerId: customer });
+      .collection<{ userId: string }>(COLLECTIONS.profiles)
+      .findOne({ paddleCustomerId: customer });
     return row?.userId ?? null;
   } catch {
     return null;

@@ -363,7 +363,7 @@ export interface BillingStatus {
   subscriptionStatus: string | null;
   publicMapCount: number;
   freePublicLimit: number;
-  stripeConfigured: boolean;
+  paddleConfigured: boolean;
 }
 
 export async function fetchBillingStatus(): Promise<BillingStatus> {
@@ -374,7 +374,7 @@ export async function fetchBillingStatus(): Promise<BillingStatus> {
       subscriptionStatus: null,
       publicMapCount: 0,
       freePublicLimit: 3,
-      stripeConfigured: false,
+      paddleConfigured: false,
     };
   }
   return req<BillingStatus>("/api/billing/status");

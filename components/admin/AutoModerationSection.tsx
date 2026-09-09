@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import type { ModerationRule } from "@/lib/types";
 import { IconTrash } from "../icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { selectInputCls } from "../AdminPanel";
 
 const FIELD_LABELS: Record<ModerationRule["field"], string> = {
   any: "Any text",
@@ -83,61 +88,84 @@ export default function AutoModerationSection({
   };
 
   return (
-    <div className="admin-panel-group">
-      <h4>Auto-moderation rules</h4>
-      <p className="muted">
+    <div className="rounded-lg border bg-muted/40 p-4">
+      <div className="mb-1 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+        Auto-moderation rules
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">
         When a new submission matches a rule, it is approved or rejected
         automatically without waiting for you. Reject rules take priority.
       </p>
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          <label className="admin-check">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">Enable auto-moderation on this map</span>
+            <Switch
               checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
+              onCheckedChange={setEnabled}
+              aria-label="Enable auto-moderation on this map"
             />
-            Enable auto-moderation on this map
-          </label>
+          </div>
 
           {rules.length > 0 && (
-            <ul className="admin-rules-list">
+            <ul className="mt-3 flex flex-col gap-2">
               {rules.map((r) => (
-                <li key={r.id} className="admin-rule">
-                  <span className={`admin-rule-action ${r.action}`}>
-                    {r.action === "approve" ? "Approve" : "Reject"}
-                  </span>
-                  <span className="muted">{FIELD_LABELS[r.field]}</span>
-                  <code className="admin-rule-pattern">{r.pattern}</code>
-                  <button
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm"
+                >
+                  {r.action === "approve" ? (
+                    <Badge className="bg-emerald-600/10 text-emerald-700 uppercase dark:bg-emerald-400/10 dark:text-emerald-300">
+                      Approve
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" className="uppercase">
+                      Reject
+                    </Badge>
+                  )}
+                  <span className="text-muted-foreground">{FIELD_LABELS[r.field]}</span>
+                  <code className="rounded border bg-muted px-2 py-0.5 font-mono text-[13px]">
+                    {r.pattern}
+                  </code>
+                  <Button
                     type="button"
-                    className="icon-btn danger"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="ml-auto text-destructive hover:text-destructive"
                     onClick={() => removeRule(r.id)}
                     aria-label="Remove rule"
                   >
                     <IconTrash size={15} />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="admin-rules-add">
-            <select value={newAction} onChange={(e) => setNewAction(e.target.value as "approve" | "reject")}>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              className={`${selectInputCls} w-32`}
+              value={newAction}
+              onChange={(e) => setNewAction(e.target.value as "approve" | "reject")}
+            >
               <option value="approve">Approve</option>
               <option value="reject">Reject</option>
             </select>
-            <select value={newField} onChange={(e) => setNewField(e.target.value as ModerationRule["field"])}>
+            <select
+              className={`${selectInputCls} w-36`}
+              value={newField}
+              onChange={(e) => setNewField(e.target.value as ModerationRule["field"])}
+            >
               {(Object.keys(FIELD_LABELS) as ModerationRule["field"][]).map((f) => (
                 <option key={f} value={f}>
                   {FIELD_LABELS[f]}
                 </option>
               ))}
             </select>
-            <input
+            <Input
               value={newPattern}
               onChange={(e) => setNewPattern(e.target.value)}
               onKeyDown={(e) => {
@@ -147,20 +175,19 @@ export default function AutoModerationSection({
                 }
               }}
               placeholder="Text to match, e.g. casino"
+              className="min-w-48 flex-1"
             />
-            <button type="button" className="action-btn2" onClick={addRule}>
+            <Button type="button" size="sm" variant="outline" onClick={addRule}>
               Add rule
-            </button>
+            </Button>
           </div>
 
-          {error && <p className="auth-error">{error}</p>}
-          {notice && (
-            <p className="muted" style={{ color: "var(--green)" }}>{notice}</p>
-          )}
-          <div className="admin-row-actions">
-            <button type="button" className="action-btn" onClick={save} disabled={busy}>
+          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+          {notice && <p className="mt-3 text-sm text-green-dark">{notice}</p>}
+          <div className="mt-3 flex items-center gap-2">
+            <Button type="button" size="sm" onClick={save} disabled={busy}>
               {busy ? "Saving…" : "Save rules"}
-            </button>
+            </Button>
           </div>
         </>
       )}

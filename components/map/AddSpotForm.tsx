@@ -1,6 +1,10 @@
 "use client";
 
 import { MARKER_PRESETS, DEFAULT_MARKER, getMarkerColor } from "@/lib/markers";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { selectInputCls } from "@/lib/utils";
 
 interface MapLike {
   _id: string;
@@ -41,24 +45,24 @@ export function AddSpotForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="map-draw-card"
+      className="absolute bottom-24 left-1/2 z-[1000] flex w-[min(360px,90vw)] -translate-x-1/2 flex-col gap-2.5 border border-border bg-surface p-4 text-ink shadow-(--shadow-lg)"
     >
-      <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
-      <div className="spot-form-grid">
-        <select onChange={(e) => setPriceLevel(e.target.value ? Number(e.target.value) : null)} title="Price level">
+      <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <select onChange={(e) => setPriceLevel(e.target.value ? Number(e.target.value) : null)} title="Price level" className={selectInputCls}>
           <option value="">Price (optional)</option>
           <option value="0">$ — cheap</option>
           <option value="1">$$ — moderate</option>
           <option value="2">$$$ — upscale</option>
           <option value="3">$$$$ — premium</option>
         </select>
-        <input onChange={(e) => setHoursNote(e.target.value)} placeholder="Hours (optional) e.g. Mon–Fri 08:00–18:00" />
-        <input onChange={(e) => setTagsText(e.target.value)} placeholder="Tags (optional, comma separated)" />
-        <textarea onChange={(e) => setTip(e.target.value)} rows={2} placeholder="Insider tip (optional), e.g. best time to visit" />
+        <Input onChange={(e) => setHoursNote(e.target.value)} placeholder="Hours (optional) e.g. Mon–Fri 08:00–18:00" />
+        <Input onChange={(e) => setTagsText(e.target.value)} placeholder="Tags (optional, comma separated)" />
+        <Textarea onChange={(e) => setTip(e.target.value)} rows={2} placeholder="Insider tip (optional), e.g. best time to visit" className="col-span-2" />
       </div>
       {activeMap?.submissionNote && (
         <div
-          className="map-submit-note"
+          className="border-l-[3px] bg-surface-2 px-3 py-1.5 text-xs leading-snug text-muted-foreground"
           style={{
             borderLeftColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
           }}
@@ -68,7 +72,7 @@ export function AddSpotForm({
       )}
       {activeMap?.collaborationMode === "invitedOnly" && (
         <div
-          className="map-submit-note"
+          className="border-l-[3px] bg-surface-2 px-3 py-1.5 text-xs leading-snug text-muted-foreground"
           style={{
             borderLeftColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
           }}
@@ -98,7 +102,7 @@ export function AddSpotForm({
           title="Custom color"
         />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="flex items-center gap-2">
         <span
           className="pm-marker"
           style={{
@@ -109,9 +113,9 @@ export function AddSpotForm({
         >
           <span>{pickMarkerEmoji}</span>
         </span>
-        <button type="submit" className="action-btn2" disabled={!newName.trim()}>
+        <Button type="submit" disabled={!newName.trim()}>
           Save spot
-        </button>
+        </Button>
       </div>
     </form>
   );

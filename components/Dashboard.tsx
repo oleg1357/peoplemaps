@@ -6,6 +6,9 @@ import { PageMeta } from "@/components/PageMeta";
 import { IconLogout, IconMapMarker, IconList } from "@/components/icons";
 import { AdminPanel } from "./AdminPanel";
 import ProfilePanel from "./ProfilePanel";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type DashboardTab = "profile" | "admin";
 
@@ -17,8 +20,10 @@ export default function Dashboard({ initialMapId }: { initialMapId?: string | nu
     return (
       <div className="page">
         <PageMeta title="Dashboard — PeopleMaps" description="Your dashboard." noIndex />
-        <div className="admin-empty">
-          <p>You must be signed in to open your dashboard.</p>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <p className="text-muted-foreground">
+            You must be signed in to open your dashboard.
+          </p>
         </div>
       </div>
     );
@@ -32,43 +37,41 @@ export default function Dashboard({ initialMapId }: { initialMapId?: string | nu
     <div className="page">
       <PageMeta title="Dashboard — PeopleMaps" description="Your dashboard." noIndex />
 
-      <div className="dash-shell">
-        <div className="dash-head">
-          <div className="dash-identity">
-            <div className="dash-avatar">{initials}</div>
-            <div className="dash-identity-info">
-              <h1>{displayName}</h1>
-              <p className="muted">{user.email}</p>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <Avatar className="size-14 bg-gradient-to-br from-sky-500 to-violet-500 text-xl font-bold text-white">
+              <AvatarFallback className="bg-transparent text-xl font-bold text-white">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="m-0 text-[22px] leading-snug text-ink">{displayName}</h1>
+              <p className="m-0 text-sm text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <button className="action-btn2 logout-btn" onClick={logout}>
+          <Button type="button" variant="outline" onClick={logout}>
             <IconLogout size={16} /> Log out
-          </button>
+          </Button>
         </div>
 
-        <div className="dash-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "profile"}
-            className={`dash-tab ${tab === "profile" ? "active" : ""}`}
-            onClick={() => setTab("profile")}
-          >
-            <IconList size={15} /> My activity
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "admin"}
-            className={`dash-tab ${tab === "admin" ? "active" : ""}`}
-            onClick={() => setTab("admin")}
-          >
-            <IconMapMarker size={15} /> Map admin
-          </button>
-        </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as DashboardTab)}>
+          <TabsList variant="line" className="w-full justify-start">
+            <TabsTrigger value="profile" className="px-3">
+              <IconList size={15} /> My activity
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="px-3">
+              <IconMapMarker size={15} /> Map admin
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-        <div className="dash-body">
-          {tab === "profile" ? <ProfilePanel /> : <AdminPanel initialMapId={initialMapId} />}
+        <div className="flex flex-col gap-5">
+          {tab === "profile" ? (
+            <ProfilePanel />
+          ) : (
+            <AdminPanel initialMapId={initialMapId} />
+          )}
         </div>
       </div>
     </div>

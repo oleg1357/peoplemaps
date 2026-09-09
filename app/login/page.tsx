@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
-import { IconMapMarker, IconPlus } from "@/components/icons";
-import { PeopleMapsLogo } from "@/components/Logo";
 import { PageMeta } from "@/components/PageMeta";
+import { AuthShell } from "@/components/AuthShell";
+import { IconGoogle } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
   const { login, loginWithGoogle, authError, usingSupabase } = useAuth();
@@ -16,7 +20,8 @@ export default function LoginPage() {
 
   const effectiveError = authError || error;
 
-  const submit = () => {
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
     setError("");
     const res = login(email, userPassword);
     if (!res.ok) {
@@ -26,72 +31,67 @@ export default function LoginPage() {
     }
   };
 
-  const google = () => {
-    setError("");
-    loginWithGoogle();
-  };
-
   return (
-    <div className="page">
+    <>
       <PageMeta title="Log in — PeopleMaps" description="Log in to PeopleMaps to rate spots, save favourites and add places to the map." noIndex />
-      <div className="flex auth-layout" style={{ height: "100%" }}>
-        <div className="sign-box">
-          <div className="signin auth-card">
-            <h2>Log in</h2>
-            <input
-              className="input"
+      <AuthShell title="Log in">
+        <form onSubmit={submit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="login-email">Email</Label>
+            <Input
+              id="login-email"
               type="email"
-              placeholder="Email"
+              autoComplete="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
-            <input
-              className="input"
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="login-password">Password</Label>
+            <Input
+              id="login-password"
               type="password"
-              placeholder="Password"
+              autoComplete="current-password"
+              placeholder="••••••••"
               value={userPassword}
               onChange={(e) => setUserPassword(e.target.value)}
+              required
             />
-            {effectiveError && <p className="auth-error">{effectiveError}</p>}
-            <div>
-              <button className="action-btn" onClick={submit}>
-                Log in
-              </button>
-            </div>
-            <div className="auth-divider">
-              <span>or</span>
-            </div>
-            <div>
-              <button className="action-btn2 google-btn" onClick={google}>
-                Continue with Google
-              </button>
-            </div>
-            <div>
-              <button
-                className="action-btn2"
-                onClick={() => router.push("/signup")}
-              >
-                Don&apos;t have an account yet? Sign up!
-              </button>
-            </div>
           </div>
+          {effectiveError && (
+            <p className="text-sm text-destructive">{effectiveError}</p>
+          )}
+          <Button type="submit" className="mt-1 w-full">
+            Log in
+          </Button>
+        </form>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <Separator className="flex-1" />
+          or
+          <Separator className="flex-1" />
         </div>
-        <div className="singin-image">
-          <div className="flex" style={{ justifyContent: "center" }}>
-            <PeopleMapsLogo size={130} />
-          </div>
-          <div className="flex" style={{ justifyContent: "center" }}>
-            <IconMapMarker size={60} color="#2986ce" />
-            <IconPlus size={60} color="#00b464" />
-            <IconMapMarker size={60} color="#F94848" />
-          </div>
-          <img
-            id="auth-image"
-            src="/pin-3.png"
-            alt="PeopleMaps map pin"
-          />
-        </div>
-      </div>
-    </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            setError("");
+            loginWithGoogle();
+          }}
+        >
+          <IconGoogle /> Continue with Google
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full text-muted-foreground"
+          onClick={() => router.push("/signup")}
+        >
+          Don&apos;t have an account yet? Sign up!
+        </Button>
+      </AuthShell>
+    </>
   );
 }

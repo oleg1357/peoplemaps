@@ -41,12 +41,6 @@
     display: flex;
   }
 
-  #nav .nav-links a,
-  #nav #log-out {
-    padding: 12px 14px;
-    font-size: 16px;
-  }
-
   #nav .nav-links #theme-toggle {
     align-self: flex-start;
     margin: 6px 4px 2px;
