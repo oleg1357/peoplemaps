@@ -1,6 +1,7 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, getOptionalContext } from "@/lib/api";
-import { getMap } from "@/lib/admin";
+import { withDb, json, error, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, getMap, canContribute } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import type { Filter } from "mongodb";
 import type { ReviewComment, Review, Spot } from "@/lib/types";
 
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const ctx = await getOptionalContext(req);
+  const lim = await rateLimitByIp(req, 10, 60_000, "comments");
+  if (!lim.ok) return error("Too many comments. Try again shortly.", 429);
+  const ctx = await getAdminContext(req);
   const body = await req.json();
   if (!body.reviewId || !body.text) return error("Missing reviewId or text");
   const text = String(body.text).trim();
@@ -35,15 +38,13 @@ export async function POST(req: Request) {
 
   const comment: ReviewComment = {
     reviewId: String(body.reviewId),
-    text: String(body.text),
+    text,
     date: new Date().toISOString().slice(0, 10),
-    user_fk: ctx.userId ?? body.user_fk ?? null,
+    user_fk: ctx.userId,
     authorName: typeof body.authorName === "string" ? body.authorName.slice(0, 80) : undefined,
     parentId: typeof body.parentId === "string" && body.parentId ? body.parentId : null,
   };
   return withDb(async (db) => {
-    // The review (and its spot) must exist and the map's allowComments toggle
-    // must permit comments.
     const review = await db.collection<Review>(COLLECTIONS.reviews).findOne({ _id: comment.reviewId as never } as never);
     if (!review) return error("Review not found", 404);
     const spot = review.spotId
@@ -51,11 +52,18 @@ export async function POST(req: Request) {
       : null;
     if (!spot) return error("Spot not found", 404);
     const map = spot.mapId ? await getMap(spot.mapId) : null;
+
+    // Enforce collaboration mode + ban checks.
+    const contrib = await canContribute(ctx, map);
+    if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
+    if (ctx.userId && spot.mapId && (await isBannedOnMap(db, spot.mapId, ctx.userId))) {
+      return error("You are banned from contributing to this map.", 403);
+    }
+
     if (map?.allowComments === false) {
       return error("Comments are disabled for this map.", 403);
     }
     const col = db.collection<ReviewComment>(COLLECTIONS.comments);
-    // The parent must exist and belong to the same review.
     if (comment.parentId) {
       const parent = await col.findOne({
         _id: comment.parentId as never,
@@ -73,7 +81,7 @@ export async function DELETE(req: Request) {
   const id = searchParams.get("id");
   if (!id) return error("Missing comment id");
 
-  const ctx = await getOptionalContext(req);
+  const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in to delete a comment.", 401);
 
   return withDb(async (db) => {
@@ -86,7 +94,6 @@ export async function DELETE(req: Request) {
       return error("You can only delete your own comments.", 403);
     }
 
-    // Remove the comment and the whole reply subtree beneath it.
     const reviewId = comment.reviewId;
     const toDelete = new Set<string>([id]);
     const scan = async () => {

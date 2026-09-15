@@ -1,22 +1,17 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, isValidLatLng, publicContentFilter } from "@/lib/api";
-import { getAdminContext, getMap, isGlobalAdmin, isMapModerator, hasMapRole } from "@/lib/admin";
+import { withDb, json, error, isValidLatLng, publicContentFilter, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, getMap, canContribute, canModerateMap } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
 import { hasValidColor } from "@/lib/markers-data";
-import type { Filter, Db } from "mongodb";
-import type { Zone, MapBan } from "@/lib/types";
+import type { Filter } from "mongodb";
+import type { Zone } from "@/lib/types";
 
 const MAX_NAME = 60;
 const MAX_DESC = 300;
 const MAX_VERTICES = 500;
 
-// True when the user is banned from contributing to this map.
-async function isBanned(db: Db, mapId: string, userId: string): Promise<boolean> {
-  return !!(await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId }));
-}
-
-// Public (map-visible) zones: approved or pre-moderation, never hidden.
 function publicZonesQuery(mapId: string): Filter<Zone> {
   return publicContentFilter<Zone>(mapId);
 }
@@ -41,6 +36,8 @@ export async function GET(req: Request) {
 
 // POST /api/zones  -> create a zone (polygon or circle)
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 10, 60_000, "zones");
+  if (!lim.ok) return error("Too many zone submissions. Try again shortly.", 429);
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return error("Invalid request body");
 
@@ -57,8 +54,6 @@ export async function POST(req: Request) {
       ? body.color
       : null;
 
-  // Choropleth: optional numeric value + trust signals. Sanitised so the map
-  // renderer only ever sees a finite number.
   let value: number | null = null;
   if (body.value !== undefined && body.value !== null) {
     const parsed = typeof body.value === "number" ? body.value : Number(body.value);
@@ -68,7 +63,7 @@ export async function POST(req: Request) {
   if (body.valueCount !== undefined && body.valueCount !== null) {
     const parsed =
       typeof body.valueCount === "number" ? body.valueCount : Number(body.valueCount);
-    if (Number.isInteger(parsed) && parsed >= 0) valueCount = parsed;
+    if (Number.isInteger(parsed) && parsed >= 0) valueCount = Math.min(parsed, 1_000_000);
   }
   const valueUpdatedAt =
     typeof body.valueUpdatedAt === "string" && body.valueUpdatedAt
@@ -102,42 +97,20 @@ export async function POST(req: Request) {
     return error("Zone shape must be 'polygon' or 'circle'.");
   }
 
-  // Zone submission rules mirror spots: anyone (when the map allows it) or a
-  // signed-in user; "invitedOnly" restricts to owner/moderators/global admins.
-  // Identity comes from the session cookie, never the request body.
   const ctx = await getAdminContext(req);
   const userId = ctx.userId;
   const map = await getMap(mapId);
 
-  const mode = map?.collaborationMode ?? "loggedIn";
-  if (mode !== "anyone") {
-    if (!ctx.userId) return error("You must be signed in to add a zone.", 401);
-  }
-  if (mode === "invitedOnly" && ctx.userId) {
-    const allowed =
-      isGlobalAdmin(ctx.userId) ||
-      (map?.ownerId && map.ownerId === ctx.userId) ||
-      (await hasMapRole(mapId, ctx.userId, ["reviewer", "moderator"]));
-    if (!allowed) {
-      return error(
-        "Only the map owner and moderators can add zones to this map.",
-        403
-      );
-    }
-  }
+  const contrib = await canContribute(ctx, map);
+  if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
 
   let moderation: Zone["moderation"] = "pending";
-  if (
-    (ctx.userId && isGlobalAdmin(ctx.userId)) ||
-    (map?.ownerId && ctx.userId && map.ownerId === ctx.userId) ||
-    (ctx.userId && (await isMapModerator(mapId, ctx.userId)))
-  ) {
+  if (await canModerateMap(ctx, mapId).then((r) => r.ok)) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
     moderation = "approved";
   }
 
-  // Auto-moderation rules can still override a pending submission.
   if (moderation === "pending") {
     const auto = await applyAutoModeration(mapId, { name, description });
     if (auto) moderation = auto;
@@ -151,10 +124,10 @@ export async function POST(req: Request) {
     center,
     radius,
     color,
+    description,
     value,
     valueCount,
     valueUpdatedAt,
-    description,
     createdBy: userId,
     createdAt: new Date().toISOString(),
     moderation,
@@ -162,12 +135,11 @@ export async function POST(req: Request) {
   };
 
   return withDb(async (db) => {
-    if (userId && (await isBanned(db, mapId, userId))) {
+    if (userId && (await isBannedOnMap(db, mapId, userId))) {
       return error("You are banned from contributing to this map.", 403);
     }
     const col = db.collection<Zone>(COLLECTIONS.zones);
     const result = await col.insertOne(zone);
-    // Re-run moderation on the object for the entry name (avoiding a re-query).
     await logActivity({
       mapId,
       actorId: ctx.userId,
@@ -176,8 +148,6 @@ export async function POST(req: Request) {
       targetId: result.insertedId.toString(),
       targetName: zone.name,
     });
-    // Return the refreshed public list so the map updates without a follow-up
-    // request, like spots do.
     const zones = await col
       .find(publicZonesQuery(mapId))
       .sort({ createdAt: -1 })

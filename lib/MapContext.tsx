@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 import { useMaps } from "@/sanity/lib/maps";
-import { DEMO_MAPS } from "@/lib/demo-data";
 import type { MapDocument, Spot, Zone, Route } from "@/lib/types";
 import {
   fetchMapData,
@@ -64,9 +63,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const [spotsLoading, setSpotsLoading] = useState(false);
 
   const maps = useMemo(() => {
-    // Demo mode (no backend configured) serves the seeded demo maps so the map
-    // view is usable out of the box. Backend mode uses the live Sanity list.
-    const source = backendLive ? publicMaps : DEMO_MAPS;
+    const source = publicMaps;
     return seededMap
       ? [seededMap, ...source.filter((m) => m._id !== seededMap._id)]
       : source;
@@ -77,7 +74,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
 
   // Everything for the selected map arrives in one request.
   const reloadMapData = useCallback(async () => {
-    if (!backendLive || !activeMapId) {
+    if (!activeMapId) {
       setMapData(EMPTY_DATA);
       return;
     }

@@ -1,4 +1,4 @@
-import { json } from "@/lib/api";
+import { json, rateLimitByIp } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import { getUserProfile } from "@/lib/billing";
 import { getPaddle } from "@/lib/paddle";
@@ -6,6 +6,9 @@ import { getPaddle } from "@/lib/paddle";
 // POST /api/billing/portal -> open Paddle's customer portal (cancel / update
 // payment method) for a Pro subscriber.
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 5, 60_000, "billing-portal");
+  if (!lim.ok)
+    return json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
   const ctx = await getAdminContext(req);
   if (!ctx.userId) {
     return json({ error: "You must be signed in." }, { status: 401 });
@@ -37,8 +40,10 @@ export async function POST(req: Request) {
       );
     }
     return json({ url });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Paddle error";
-    return json({ error: `Portal failed: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Could not open the billing portal. Try again in a moment." },
+      { status: 500 }
+    );
   }
 }

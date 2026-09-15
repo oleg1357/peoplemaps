@@ -1,5 +1,5 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, getOptionalContext } from "@/lib/api";
+import { withDb, json, error, getOptionalContext, rateLimitByIp } from "@/lib/api";
 import type { ReviewVote } from "@/lib/types";
 
 // POST /api/votes -> { reviewId, userId, on:boolean } toggles helpful vote
@@ -23,6 +23,8 @@ export async function GET(req: Request) {
 // POST /api/votes -> { reviewId, on?:boolean } toggles helpful vote. Identity
 // always comes from the session cookie, never the request body.
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 20, 60_000, "votes");
+  if (!lim.ok) return error("Too many votes. Try again shortly.", 429);
   const ctx = await getOptionalContext(req);
   const userId = ctx.userId;
   if (!userId) return error("You must be signed in to vote.", 401);

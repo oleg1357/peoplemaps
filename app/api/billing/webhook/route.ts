@@ -32,10 +32,9 @@ export async function POST(req: Request) {
   try {
     const raw = await req.text();
     event = await paddle.webhooks.unmarshal(raw, secret, signature);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid signature";
+  } catch {
     return json(
-      { error: `Webhook signature verification failed: ${message}` },
+      { error: "Webhook signature verification failed." },
       { status: 400 }
     );
   }

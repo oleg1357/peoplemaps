@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter, publicContentFilter } from "@/lib/api";
-import { getAdminContext, getMap, isGlobalAdmin, canModerateMap, isMapModerator, hasMapRole } from "@/lib/admin";
+import { withDb, json, error, toObjectId, byIdFilter, publicContentFilter, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, getMap, canContribute, canModerateMap } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
 import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
-import type { Spot, MapBan } from "@/lib/types";
-import type { Filter, Db } from "mongodb";
-
-// True when the user is banned from contributing to this map.
-async function isBanned(db: Db, mapId: string, userId: string): Promise<boolean> {
-  return !!(
-    await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId })
-  );
-}
+import type { Spot } from "@/lib/types";
 
 // Public (map-visible) spots: approved or pre-moderation, never hidden.
-function publicSpotsQuery(mapId: string): Filter<Spot> {
+function publicSpotsQuery(mapId: string) {
   return publicContentFilter<Spot>(mapId);
 }
 
@@ -36,8 +29,6 @@ export async function GET(req: Request) {
       return spot ? json(spot) : error("Spot not found", 404);
     }
     if (!mapId) return error("Missing mapId");
-    // Public map only shows spots that have been approved (or predate moderation)
-    // and are not hidden. Pending and rejected spots are hidden from the public map.
     const spots = await col
       .find(publicSpotsQuery(mapId))
       .sort({ createdAt: -1 })
@@ -49,6 +40,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 20, 60_000, "spots");
+  if (!lim.ok) return error("Too many submissions. Try again shortly.", 429);
   const body = (await req.json()) as Partial<Spot>;
   if (!body.mapId) return error("Missing mapId");
   const mapId = body.mapId;
@@ -56,54 +49,27 @@ export async function POST(req: Request) {
     return error("Spot requires name, lat and lng");
   }
 
-  // Spot submissions require a signed-in user (unless the map is in "anyone"
-  // mode). Identity comes from the session cookie (never from the request body),
-  // and moderation is decided server-side.
   const ctx = await getAdminContext(req);
   const userId = ctx.userId;
-
   const map = await getMap(mapId);
 
-  // collaborationMode decides who can add spots to this map.
-  const mode = map?.collaborationMode ?? "loggedIn";
-  if (mode !== "anyone") {
-    if (!ctx.userId) {
-      return error("You must be signed in to add a spot.", 401);
-    }
-  }
-  if (mode === "invitedOnly" && ctx.userId) {
-    const allowed =
-      isGlobalAdmin(ctx.userId) ||
-      (map?.ownerId && map.ownerId === ctx.userId) ||
-      (await hasMapRole(mapId, ctx.userId, ["reviewer", "moderator"]));
-    if (!allowed) {
-      return error(
-        "Only the map owner and moderators can add spots to this map.",
-        403
-      );
-    }
-  }
+  // Enforce collaboration mode (anyone / loggedIn / invitedOnly).
+  const contrib = await canContribute(ctx, map);
+  if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
 
   let moderation: Spot["moderation"] = "pending";
-  // The map owner, global admins and designated moderators are always trusted; a
-  // map can also disable approval entirely so everyone's spots go live
-  // immediately.
-  if (
-    (ctx.userId && isGlobalAdmin(ctx.userId)) ||
-    (map?.ownerId && ctx.userId && map.ownerId === ctx.userId) ||
-    (ctx.userId && (await isMapModerator(mapId, ctx.userId)))
-  ) {
+  // Trusted authors and maps with approval disabled get auto-approved.
+  if (await canModerateMap(ctx, mapId).then((r) => r.ok)) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
     moderation = "approved";
   }
 
-  // Only the known marker emoji are stored; everything else falls back to the
-  // map's default on the client.
   const marker = sanitizeMarkerEmoji(String(body.marker ?? ""));
 
-  // Rich content fields — sanitized, optional, and capped so one contributor
-  // can't bloat a spot.
+  const name = String(body.name).trim().slice(0, 100);
+  const street = String(body.street ?? "").slice(0, 200);
+  const city = String(body.city ?? "").slice(0, 100);
   const priceLevel = [0, 1, 2, 3].includes(Number(body.priceLevel))
     ? Number(body.priceLevel)
     : null;
@@ -116,12 +82,9 @@ export async function POST(req: Request) {
     : [];
   const tip = String(body.tip ?? "").slice(0, 280) || null;
 
-  // Auto-moderation rules can still override a pending submission (approve or
-  // reject on match). Trusted authors and maps with approval disabled keep the
-  // "approved" status decided above — rules never downgrade them.
   if (moderation === "pending") {
     const auto = await applyAutoModeration(mapId, {
-      name: String(body.name),
+      name,
       tip,
       tags,
       hoursNote,
@@ -131,9 +94,9 @@ export async function POST(req: Request) {
 
   const spot: Spot = {
     mapId,
-    name: String(body.name),
-    street: String(body.street ?? ""),
-    city: String(body.city ?? ""),
+    name,
+    street,
+    city,
     zip: Number(body.zip ?? 0),
     lat: Number(body.lat),
     lng: Number(body.lng),
@@ -149,13 +112,11 @@ export async function POST(req: Request) {
     tip,
   };
   return withDb(async (db) => {
-    if (userId && (await isBanned(db, mapId, userId))) {
+    if (userId && (await isBannedOnMap(db, mapId, userId))) {
       return error("You are banned from contributing to this map.", 403);
     }
     const col = db.collection<Spot>(COLLECTIONS.spots);
     const result = await col.insertOne(spot);
-    // Return the updated public list so the map can refresh without a
-    // follow-up request.
     const spots = await col
       .find(publicSpotsQuery(mapId))
       .sort({ createdAt: -1 })
@@ -181,15 +142,14 @@ export async function DELETE(req: Request) {
       projection: { mapId: 1, createdBy: 1 },
     });
     if (!existing) return error("Spot not found", 404);
-    if (await isBanned(db, existing.mapId, userId)) {
+    if (await isBannedOnMap(db, existing.mapId, userId)) {
       return error("You are banned from contributing to this map.", 403);
     }
-    // Only the submitter, the map owner or a global admin may delete a spot.
     if (existing.createdBy !== userId) {
       const perm = await canModerateMap(ctx, existing.mapId);
       if (!perm.ok) return error(perm.reason || "Forbidden", 403);
     }
-await col.deleteOne(byIdFilter<Spot>(oid));
+    await col.deleteOne(byIdFilter<Spot>(oid));
     await db.collection(COLLECTIONS.reviews).deleteMany({ spotId });
     await db.collection(COLLECTIONS.photos).deleteMany({ spotId });
     await db.collection(COLLECTIONS.comments).deleteMany({ spotId });
@@ -231,11 +191,10 @@ export async function PATCH(req: Request) {
     });
     if (!existing) return error("Spot not found", 404);
 
-    if (await isBanned(db, existing.mapId, userId)) {
+    if (await isBannedOnMap(db, existing.mapId, userId)) {
       return error("You are banned from contributing to this map.", 403);
     }
 
-    // The submitter may edit their own spot; otherwise a moderator/admin may.
     if (existing.createdBy !== userId) {
       const perm = await canModerateMap(ctx, existing.mapId);
       if (!perm.ok) return error("You can only edit your own spots.", 403);
@@ -244,12 +203,12 @@ export async function PATCH(req: Request) {
     const set: Record<string, unknown> = {};
     const num = (v: unknown) => (typeof v === "number" ? v : Number(v));
     if (body.name !== undefined) {
-      const n = String(body.name).trim();
+      const n = String(body.name).trim().slice(0, 100);
       if (!n) return error("Spot name is required.");
       set.name = n;
     }
-    if (body.street !== undefined) set.street = String(body.street ?? "");
-    if (body.city !== undefined) set.city = String(body.city ?? "");
+    if (body.street !== undefined) set.street = String(body.street ?? "").slice(0, 200);
+    if (body.city !== undefined) set.city = String(body.city ?? "").slice(0, 100);
     if (body.zip !== undefined) set.zip = Number.isFinite(num(body.zip)) ? num(body.zip) : 0;
     if (body.lat !== undefined) {
       const lat = num(body.lat);

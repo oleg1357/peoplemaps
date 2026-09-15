@@ -40,7 +40,7 @@ import type {
   ModerationRule,
   MapContributorEntry,
 } from "./types";
-import type { MapRoleType } from "@/lib/roles";
+import type { MapCapability, MapRoleType } from "@/lib/roles";
 
 // True when the backend (Mongo + Sanity) is wired. Uses public env flags so the
 // client bundle can decide which experience to render. The API route handlers
@@ -335,15 +335,20 @@ export interface AdminMapEntry extends MapDocument {
   // The caller's relationship to this map: "owner" or a team role
   // (viewer/reviewer/moderator). Absent for maps read via other paths.
   role?: "owner" | MapRoleType;
+  // The caller's effective fully-granular grants on this map (owners/admins get
+  // everything; team members get their exact set — see lib/roles.ts).
+  caps?: MapCapability[];
 }
 
 // A team member of a map. Roles gate which capabilities they get in the admin
 // UI (see lib/roles.ts): viewers are read-only, reviewers approve/reject,
-// moderators get full content control.
+// moderators get full content control. Fully granular PAM: an explicit
+// `capabilities` array overrides the role preset for that member.
 export interface MapRoleEntry {
   _id: string;
   userId: string;
   role?: MapRoleType; // absent = legacy moderator
+  capabilities?: MapCapability[] | null; // explicit granular grants
   displayName?: string;
   email?: string;
   addedBy: string;
@@ -534,11 +539,29 @@ export async function fetchMapModerators(mapId: string): Promise<MapRolesRespons
 export async function addMapModerator(
   mapId: string,
   email: string,
-  role: MapRoleType = "moderator"
+  role: MapRoleType = "moderator",
+  capabilities?: MapCapability[]
 ): Promise<MapRolesResponse> {
   return req<MapRolesResponse>("/api/admin/maps/roles", {
     method: "POST",
-    body: JSON.stringify({ mapId, email, role }),
+    body: JSON.stringify({
+      mapId,
+      email,
+      role,
+      ...(capabilities ? { capabilities } : {}),
+    }),
+  });
+}
+
+// Update a team member's role preset and/or their explicit granular grants.
+export async function updateMapModerator(
+  mapId: string,
+  userId: string,
+  patch: { role?: MapRoleType; capabilities?: MapCapability[] }
+): Promise<MapRolesResponse> {
+  return req<MapRolesResponse>("/api/admin/maps/roles", {
+    method: "PATCH",
+    body: JSON.stringify({ mapId, userId, ...patch }),
   });
 }
 

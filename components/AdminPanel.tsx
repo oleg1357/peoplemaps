@@ -26,6 +26,7 @@ import {
   destroyRoute,
   fetchMapModerators,
   addMapModerator,
+  updateMapModerator,
   removeMapModerator,
   fetchAdminReports,
   resolveReport,
@@ -58,7 +59,6 @@ import {
   ALL_CAPABILITIES,
   ROLE_CAPABILITIES,
   type MapCapability,
-  type MapRoleType,
 } from "@/lib/roles";
 import {
   MARKER_PRESETS,
@@ -221,8 +221,6 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
 
   const [moderators, setModerators] = useState<MapRoleEntry[]>([]);
   const [loadingModerators, setLoadingModerators] = useState(false);
-  const [moderatorEmail, setModeratorEmail] = useState("");
-  const [moderatorRole, setModeratorRole] = useState<MapRoleType>("moderator");
   const [moderatorBusy, setModeratorBusy] = useState(false);
   const [moderatorError, setModeratorError] = useState("");
   const [moderatorNotice, setModeratorNotice] = useState("");
@@ -522,20 +520,18 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
   // the map: the map's owner or a global admin.
   const canManageMap = isAdmin || activeMap?.role === "owner";
 
-  // Capabilities derived from the caller's role on the active map. Owners and
-  // global admins have everything; viewers/reviewers/moderators get whatever
-  // their role grants (see lib/roles.ts).
-  const role = activeMap?.role;
+  // Capabilities derived from the caller's standing on the active map. Owners
+  // and global admins have everything; the admin-maps API surfaces the caller's
+  // exact (fully granular) grants as `activeMap.caps` — see lib/roles.ts.
   const caps: readonly MapCapability[] =
-    isAdmin || role === "owner" || !role
+    activeMap?.caps ??
+    (isAdmin || !activeMap?.role || activeMap.role === "owner"
       ? ALL_CAPABILITIES
-      : ROLE_CAPABILITIES[role];
+      : ROLE_CAPABILITIES[activeMap.role]);
   const canExport = caps.includes("export");
   const canApprove = caps.includes("approve");
   const canModerate = caps.includes("moderate");
   const canStaff = caps.includes("staff");
-  const isReadOnlyTeamRole =
-    role !== undefined && role !== "owner" && role !== "moderator";
 
   const loadModerators = useCallback(async (mapId: string) => {
     setLoadingModerators(true);
@@ -571,20 +567,23 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
     if (activeMap && view === "contributors") loadContributors(activeMap._id);
   }, [activeMap, view, loadContributors]);
 
-  const handleAddModerator = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeMap || !moderatorEmail.trim() || moderatorBusy) return;
+  const handleAddModerator = async (
+    email: string,
+    role: import("@/lib/roles").MapRoleType,
+    capabilities?: MapCapability[]
+  ) => {
+    if (!activeMap || !email.trim() || moderatorBusy) return;
     setModeratorBusy(true);
     setModeratorError("");
     setModeratorNotice("");
     try {
       const res = await addMapModerator(
         activeMap._id,
-        moderatorEmail.trim(),
-        moderatorRole
+        email.trim(),
+        role,
+        capabilities
       );
       setModerators(res.members);
-      setModeratorEmail("");
       setModeratorNotice("Team member added.");
     } catch (err) {
       setModeratorError((err as Error).message || "Failed to add moderator.");
@@ -603,6 +602,22 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
       setModeratorNotice("Moderator removed.");
     } catch (err) {
       setModeratorError((err as Error).message || "Failed to remove moderator.");
+    }
+  };
+
+  const handleUpdateModerator = async (
+    userId: string,
+    patch: { role: import("@/lib/roles").MapRoleType; capabilities: MapCapability[] }
+  ) => {
+    if (!activeMap) return;
+    setModeratorError("");
+    setModeratorNotice("");
+    try {
+      const res = await updateMapModerator(activeMap._id, userId, patch);
+      setModerators(res.members);
+      setModeratorNotice("Team member updated.");
+    } catch (err) {
+      setModeratorError((err as Error).message || "Failed to update team member.");
     }
   };
 
@@ -1187,6 +1202,8 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                       }
                       onToggleHidden={(spot) => handleToggleHidden(spot)}
                       onDestroy={(spot) => setConfirmDestroy(spot)}
+                      canApprove={canApprove}
+                      canModerate={canModerate}
                     />
                   </>
                 )}
@@ -1236,6 +1253,8 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                     onRejectAllPendingZones={handleRejectAllPendingZones}
                     onApproveAllPendingRoutes={handleApproveAllPendingRoutes}
                     onRejectAllPendingRoutes={handleRejectAllPendingRoutes}
+                    canApprove={canApprove}
+                    canModerate={canModerate}
                   />
                 )}
 
@@ -1262,6 +1281,7 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                     reports={reports}
                     loadingReports={loadingReports}
                     onResolve={handleResolveReport}
+                    canStaff={canStaff}
                   />
                 )}
 
@@ -1277,6 +1297,7 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                     banNotice={banNotice}
                     onBan={handleBan}
                     onUnban={handleUnban}
+                    canStaff={canStaff}
                   />
                 )}
 
@@ -1284,13 +1305,12 @@ export function AdminPanel({ initialMapId }: { initialMapId?: string | null }) {
                   <AdminModeratorsView
                     moderators={moderators}
                     loadingModerators={loadingModerators}
-                    moderatorEmail={moderatorEmail}
-                    setModeratorEmail={setModeratorEmail}
                     moderatorBusy={moderatorBusy}
                     moderatorError={moderatorError}
                     moderatorNotice={moderatorNotice}
                     onAddModerator={handleAddModerator}
                     onRemoveModerator={handleRemoveModerator}
+                    onUpdateModerator={handleUpdateModerator}
                   />
                 )}
 
@@ -1669,6 +1689,8 @@ export function ZoneAdminRow({
   onReject,
   onToggleHidden,
   onDestroy,
+  canApprove,
+  canModerate,
 }: {
   zone: Zone;
   editing: boolean;
@@ -1681,6 +1703,8 @@ export function ZoneAdminRow({
   onReject: () => void;
   onToggleHidden: () => void;
   onDestroy: () => void;
+  canApprove?: boolean;
+  canModerate?: boolean;
 }) {
   const pending = zone.moderation === "pending";
 
@@ -1738,7 +1762,7 @@ export function ZoneAdminRow({
         </div>
       </div>
       <div className="admin-row-actions">
-        {pending && (
+        {pending && canApprove !== false && (
           <>
             <Button type="button" size="sm" onClick={onApprove}>
               <IconCheck size={15} /> Approve
@@ -1748,27 +1772,33 @@ export function ZoneAdminRow({
             </Button>
           </>
         )}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => onStartEdit(zone)}
-        >
-          Edit
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
-          {zone.hidden ? "Restore" : "Hide"}
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          onClick={onDestroy}
-          aria-label="Destroy zone"
-        >
-          <IconTrash size={16} />
-        </Button>
+        {canModerate !== false && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onStartEdit(zone)}
+            >
+              Edit
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
+              {zone.hidden ? "Restore" : "Hide"}
+            </Button>
+          </>
+        )}
+        {canModerate !== false && (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={onDestroy}
+            aria-label="Destroy zone"
+          >
+            <IconTrash size={16} />
+          </Button>
+        )}
       </div>
     </li>
   );
@@ -1786,6 +1816,8 @@ export function RouteAdminRow({
   onReject,
   onToggleHidden,
   onDestroy,
+  canApprove,
+  canModerate,
 }: {
   route: Route;
   editing: boolean;
@@ -1798,6 +1830,8 @@ export function RouteAdminRow({
   onReject: () => void;
   onToggleHidden: () => void;
   onDestroy: () => void;
+  canApprove?: boolean;
+  canModerate?: boolean;
 }) {
   const pending = route.moderation === "pending";
 
@@ -1853,7 +1887,7 @@ export function RouteAdminRow({
         </div>
       </div>
       <div className="admin-row-actions">
-        {pending && (
+        {pending && canApprove !== false && (
           <>
             <Button type="button" size="sm" onClick={onApprove}>
               <IconCheck size={15} /> Approve
@@ -1863,27 +1897,33 @@ export function RouteAdminRow({
             </Button>
           </>
         )}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => onStartEdit(route)}
-        >
-          Edit
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
-          {route.hidden ? "Restore" : "Hide"}
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          className="text-destructive hover:text-destructive"
-          onClick={onDestroy}
-          aria-label="Destroy route"
-        >
-          <IconTrash size={16} />
-        </Button>
+        {canModerate !== false && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onStartEdit(route)}
+            >
+              Edit
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onToggleHidden}>
+              {route.hidden ? "Restore" : "Hide"}
+            </Button>
+          </>
+        )}
+        {canModerate !== false && (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={onDestroy}
+            aria-label="Destroy route"
+          >
+            <IconTrash size={16} />
+          </Button>
+        )}
       </div>
     </li>
   );

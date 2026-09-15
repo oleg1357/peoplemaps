@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabaseConfigured } from "@/lib/supabase";
 
 export async function getServerSupabase() {
@@ -25,4 +26,16 @@ export async function getServerSupabase() {
       },
     },
   });
+}
+
+// Server-side admin client with the service-role key. Returns null when the key
+// is not configured — callers should fall back to the public client or reject.
+let _adminClient: SupabaseClient | null = null;
+export async function getAdminSupabase(): Promise<SupabaseClient | null> {
+  if (_adminClient) return _adminClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  _adminClient = createClient(url, key);
+  return _adminClient;
 }

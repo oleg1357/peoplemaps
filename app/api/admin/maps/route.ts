@@ -1,7 +1,7 @@
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json } from "@/lib/api";
 import { NextResponse } from "next/server";
-import { getAdminContext, canManageMap, getMap, getMapRoleType } from "@/lib/admin";
+import { getAdminContext, canManageMap, getMap } from "@/lib/admin";
 import {
   countOwnedPublicMaps,
   FREE_PUBLIC_MAP_LIMIT,
@@ -18,7 +18,12 @@ import {
   sanitizeMarkerEmoji,
 } from "@/lib/markers-data";
 import type { MapDocument } from "@/lib/types";
-import type { MapRoleType } from "@/lib/roles";
+import {
+  ALL_CAPABILITIES,
+  capabilitiesForMember,
+  type MapCapability,
+  type MapRoleType,
+} from "@/lib/roles";
 
 // GET /api/admin/maps  -> maps the caller may moderate.
 // Map owners see their own maps; global admins see every map (with spot counts).
@@ -43,12 +48,11 @@ export async function GET(req: Request) {
     maps = [];
   }
 
-  const owned = isAdmin ? maps : maps.filter((m) => m.ownerId === ctx.userId);
-
   // Team members (viewer/reviewer/moderator) also get an admin view of maps they
   // don't own. Owners take precedence, so their own maps stay "owner" even if a
-  // stale role row exists.
-  const roleById = new Map<string, MapRoleType>();
+  // stale role row exists. Full role rows are kept so each map entry can carry
+  // the caller's effective (fully granular) capability grants.
+  const roleDocById = new Map<string, import("@/lib/types").MapRole>();
   if (!isAdmin && ctx.userId) {
     try {
       const db = await getDb();
@@ -58,20 +62,20 @@ export async function GET(req: Request) {
           .find({ userId: ctx.userId })
           .toArray();
         for (const r of roles) {
-          roleById.set(r.mapId, r.role ?? "moderator");
+          roleDocById.set(r.mapId, r);
         }
       }
     } catch {
-      roleById.clear();
+      roleDocById.clear();
     }
   }
 
   const viewable = isAdmin
     ? maps
     : [
-        ...owned,
+        ...maps.filter((m) => m.ownerId === ctx.userId),
         ...maps.filter(
-          (m) => roleById.has(m._id) && m.ownerId !== ctx.userId
+          (m) => roleDocById.has(m._id) && m.ownerId !== ctx.userId
         ),
       ];
 
@@ -117,11 +121,24 @@ export async function GET(req: Request) {
   }
 
   const roleFor = (m: MapDocument): "owner" | MapRoleType =>
-    m.ownerId === ctx.userId ? "owner" : roleById.get(m._id) ?? "owner";
+    m.ownerId === ctx.userId || ctx.isGlobalAdmin
+      ? "owner"
+      : roleDocById.get(m._id)?.role ?? "moderator";
 
-  const result = (withCounts ?? viewable.map((m) => ({ ...m, spotTotal: 0, spotPending: 0, spotHidden: 0 }))).map(
-    (m) => ({ ...m, role: roleFor(m) })
-  );
+  // Effective fully-granular grants for the caller on this map. Owners and
+  // global admins have every capability; team members get their exact set.
+  const capsFor = (m: MapDocument): MapCapability[] =>
+    m.ownerId === ctx.userId || ctx.isGlobalAdmin
+      ? [...ALL_CAPABILITIES]
+      : (() => {
+          const row = roleDocById.get(m._id);
+          return row ? capabilitiesForMember(row) : [...ALL_CAPABILITIES];
+        })();
+
+  const result = (
+    withCounts ??
+    viewable.map((m) => ({ ...m, spotTotal: 0, spotPending: 0, spotHidden: 0 }))
+  ).map((m) => ({ ...m, role: roleFor(m), caps: capsFor(m) }));
 
   return json({ maps: result, owned: result, isAdmin });
 }
@@ -250,9 +267,11 @@ export async function POST(req: Request) {
       { _id: doc._id, title: doc.title, slug: doc.slug?.current ?? null },
       { status: 201 }
     );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Sanity error";
-    return json({ error: `Failed to create map: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Failed to create map. Please try again." },
+      { status: 500 }
+    );
   }
 }
 
@@ -401,9 +420,11 @@ export async function PATCH(req: Request) {
     await writeClient.patch(String(mapId)).set(patch).commit();
     const updated = await getMap(String(mapId));
     return json({ ok: true, map: updated });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Sanity error";
-    return json({ error: `Failed to update map: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Failed to update map. Please try again." },
+      { status: 500 }
+    );
   }
 }
 
@@ -438,9 +459,11 @@ export async function DELETE(req: Request) {
       }
     });
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Sanity error";
-    return json({ error: `Failed to delete map: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Failed to delete map. Please try again." },
+      { status: 500 }
+    );
   }
 }
 

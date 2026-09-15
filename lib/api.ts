@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { COLLECTIONS } from "@/lib/mongodb";
 import { getServerSupabase } from "@/lib/supabase-server";
 import { MongoServerError, ObjectId, type Filter } from "mongodb";
+import type { MapBan } from "@/lib/types";
 
 export function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
@@ -18,7 +20,9 @@ export function notConfigured() {
   );
 }
 
-export async function withDb<T>(fn: (db: NonNullable<Awaited<ReturnType<typeof getDb>>>) => Promise<T>) {
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+export async function withDb<T>(fn: (db: Db) => Promise<T>) {
   let db;
   try {
     db = await getDb();
@@ -31,13 +35,25 @@ export async function withDb<T>(fn: (db: NonNullable<Awaited<ReturnType<typeof g
     const result = await fn(db);
     return result instanceof NextResponse ? result : json(result);
   } catch (err) {
+    console.error("DB write error:", err);
     if (err instanceof MongoServerError) {
-      return error(err.message, 500);
+      return error("A database error occurred.", 500);
     }
-    console.error(err);
     return error("Internal server error", 500);
   }
 }
+
+/** True when the user is banned from contributing to this map. */
+export async function isBannedOnMap(db: Db, mapId: string, userId: string): Promise<boolean> {
+  return !!(
+    await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId })
+  );
+}
+
+// ---- Rate limiting ----
+// Upstash Redis (sliding window) when configured, otherwise an in-process
+// bucket. See lib/rate-limit.ts.
+export { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 
 export function toObjectId(id: string): ObjectId | null {
   if (!ObjectId.isValid(id)) return null;

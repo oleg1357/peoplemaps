@@ -1,4 +1,4 @@
-import { json } from "@/lib/api";
+import { json, rateLimitByIp } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import { getPaddle, getProPriceId } from "@/lib/paddle";
 
@@ -8,6 +8,9 @@ import { getPaddle, getProPriceId } from "@/lib/paddle";
 // automatically, and copies our custom_data (userId) onto it so the webhook can
 // mark the user Pro.
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 5, 60_000, "checkout");
+  if (!lim.ok)
+    return json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
   const ctx = await getAdminContext(req);
   if (!ctx.userId) {
     return json({ error: "You must be signed in to upgrade." }, { status: 401 });
@@ -38,8 +41,10 @@ export async function POST(req: Request) {
       );
     }
     return json({ url });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Paddle error";
-    return json({ error: `Checkout failed: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Checkout failed. Please try again in a moment." },
+      { status: 500 }
+    );
   }
 }

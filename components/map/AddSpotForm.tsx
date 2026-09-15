@@ -45,7 +45,7 @@ export function AddSpotForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="absolute bottom-24 left-1/2 z-[1000] flex w-[min(360px,90vw)] -translate-x-1/2 flex-col gap-2.5 border border-border bg-surface p-4 text-ink shadow-(--shadow-lg)"
+      className="map-form-card"
     >
       <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Spot name" />
       <div className="mt-2 grid grid-cols-2 gap-2">

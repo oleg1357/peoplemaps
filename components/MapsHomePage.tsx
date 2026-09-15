@@ -1035,8 +1035,9 @@ export function MapsHomePage({
   return (
     <div className={`map-container ${drawMode || measureMode ? "drawing" : ""}`}>
       {maps.length > 0 && (
-        <div id="map-buttons" className="buttons" style={{ top: "calc(var(--header-h) + 6px)" }}>
+        <div id="map-buttons" className="buttons">
           <select
+            className="map-select"
             value={selected?.mapId || activeMap?._id || ""}
             onChange={(e) => {
               const id = e.target.value;
@@ -1044,7 +1045,6 @@ export function MapsHomePage({
               selectMap(id);
               if (m) router.replace(buildPermalink(m, true));
             }}
-            style={{ padding: "6px 8px", borderRadius: 0, border: "1px solid var(--border)" }}
           >
             {(maps as Array<{ _id: string; title: string }>).map((m) => (
               <option key={m._id} value={m._id}>

@@ -1,22 +1,17 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, isValidLatLng, publicContentFilter } from "@/lib/api";
-import { getAdminContext, getMap, isGlobalAdmin, isMapModerator, hasMapRole } from "@/lib/admin";
+import { withDb, json, error, isValidLatLng, publicContentFilter, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, getMap, canContribute, canModerateMap } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
 import { hasValidColor } from "@/lib/markers-data";
-import type { Filter, Db } from "mongodb";
-import type { Route, MapBan } from "@/lib/types";
+import type { Filter } from "mongodb";
+import type { Route } from "@/lib/types";
 
 const MAX_NAME = 100;
 const MAX_DESC = 300;
 const MAX_VERTICES = 2000;
 
-// True when the user is banned from contributing to this map.
-async function isBanned(db: Db, mapId: string, userId: string): Promise<boolean> {
-  return !!(await db.collection<MapBan>(COLLECTIONS.bans).findOne({ mapId, userId }));
-}
-
-// Public (map-visible) routes: approved or pre-moderation, never hidden.
 function publicRoutesQuery(mapId: string): Filter<Route> {
   return publicContentFilter<Route>(mapId);
 }
@@ -41,6 +36,8 @@ export async function GET(req: Request) {
 
 // POST /api/routes  -> create a route (ordered polyline points)
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 10, 60_000, "routes");
+  if (!lim.ok) return error("Too many route submissions. Try again shortly.", 429);
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return error("Invalid request body");
 
@@ -72,37 +69,16 @@ export async function POST(req: Request) {
   const userId = ctx.userId;
   const map = await getMap(mapId);
 
-  // Route submission rules mirror spots: anyone (when the map allows it) or a
-  // signed-in user; "invitedOnly" restricts to owner/moderators/global admins.
-  const mode = map?.collaborationMode ?? "loggedIn";
-  if (mode !== "anyone") {
-    if (!ctx.userId) return error("You must be signed in to add a route.", 401);
-  }
-  if (mode === "invitedOnly" && ctx.userId) {
-    const allowed =
-      isGlobalAdmin(ctx.userId) ||
-      (map?.ownerId && map.ownerId === ctx.userId) ||
-      (await hasMapRole(mapId, ctx.userId, ["reviewer", "moderator"]));
-    if (!allowed) {
-      return error(
-        "Only the map owner and moderators can add routes to this map.",
-        403
-      );
-    }
-  }
+  const contrib = await canContribute(ctx, map);
+  if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
 
   let moderation: Route["moderation"] = "pending";
-  if (
-    (ctx.userId && isGlobalAdmin(ctx.userId)) ||
-    (map?.ownerId && ctx.userId && map.ownerId === ctx.userId) ||
-    (ctx.userId && (await isMapModerator(mapId, ctx.userId)))
-  ) {
+  if (await canModerateMap(ctx, mapId).then((r) => r.ok)) {
     moderation = "approved";
   } else if (map && map.requireApproval === false) {
     moderation = "approved";
   }
 
-  // Auto-moderation rules can still override a pending submission.
   if (moderation === "pending") {
     const auto = await applyAutoModeration(mapId, { name, description });
     if (auto) moderation = auto;
@@ -121,7 +97,7 @@ export async function POST(req: Request) {
   };
 
   return withDb(async (db) => {
-    if (userId && (await isBanned(db, mapId, userId))) {
+    if (userId && (await isBannedOnMap(db, mapId, userId))) {
       return error("You are banned from contributing to this map.", 403);
     }
     const col = db.collection<Route>(COLLECTIONS.routes);
@@ -134,8 +110,6 @@ export async function POST(req: Request) {
       targetId: result.insertedId.toString(),
       targetName: route.name,
     });
-    // Return the refreshed public list so the map updates without a follow-up
-    // request, like spots do.
     const routes = await col
       .find(publicRoutesQuery(mapId))
       .sort({ createdAt: -1 })

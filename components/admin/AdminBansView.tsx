@@ -15,6 +15,7 @@ export default function AdminBansView({
   banNotice,
   onBan,
   onUnban,
+  canStaff,
 }: {
   bans: MapBan[];
   loadingBans: boolean;
@@ -26,6 +27,7 @@ export default function AdminBansView({
   banNotice: string;
   onBan: () => void;
   onUnban: (b: MapBan) => void;
+  canStaff: boolean;
 }) {
   return (
     <div className="mt-4">
@@ -35,23 +37,25 @@ export default function AdminBansView({
       </p>
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       {banNotice && <p className="mb-2 text-sm text-green-dark">{banNotice}</p>}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Input
-          value={banInput}
-          onChange={(e) => setBanInput(e.target.value)}
-          placeholder="User id"
-          className="w-48"
-        />
-        <Input
-          value={banReason}
-          onChange={(e) => setBanReason(e.target.value)}
-          placeholder="Reason (optional)"
-          className="w-56"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={onBan}>
-          Ban user
-        </Button>
-      </div>
+      {canStaff && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Input
+            value={banInput}
+            onChange={(e) => setBanInput(e.target.value)}
+            placeholder="User id"
+            className="w-48"
+          />
+          <Input
+            value={banReason}
+            onChange={(e) => setBanReason(e.target.value)}
+            placeholder="Reason (optional)"
+            className="w-56"
+          />
+          <Button type="button" size="sm" variant="outline" onClick={onBan}>
+            Ban user
+          </Button>
+        </div>
+      )}
       {loadingBans ? (
         <p className="text-sm text-muted-foreground">Loading bans…</p>
       ) : bans.length === 0 ? (
@@ -69,15 +73,21 @@ export default function AdminBansView({
                   {b.reason} · {new Date(b.createdAt).toLocaleString()}
                 </div>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="link"
-                className="h-auto px-0 text-destructive"
-                onClick={() => onUnban(b)}
-              >
-                Unban
-              </Button>
+              {canStaff ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="link"
+                  className="h-auto px-0 text-destructive"
+                  onClick={() => onUnban(b)}
+                >
+                  Unban
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Banned {new Date(b.createdAt).toLocaleDateString()}
+                </span>
+              )}
             </li>
           ))}
         </ul>

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter, getOptionalContext } from "@/lib/api";
-import { getMap } from "@/lib/admin";
+import { withDb, json, error, toObjectId, byIdFilter, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, getMap, canContribute } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import type { Review, Spot } from "@/lib/types";
 
 const MIN_SCORE = 0;
 const MAX_SCORE = 5;
+const MAX_REVIEW_LENGTH = 2000;
 
 // GET /api/reviews?spotId=<id>
 // POST /api/reviews  -> add review
@@ -23,25 +25,32 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const ctx = await getOptionalContext(req);
+  const lim = await rateLimitByIp(req, 10, 60_000, "reviews");
+  if (!lim.ok) return error("Too many reviews. Try again shortly.", 429);
+  const ctx = await getAdminContext(req);
   const body = await req.json();
   if (!body.spotId) return error("Missing spotId");
   const score = Math.max(MIN_SCORE, Math.min(MAX_SCORE, Math.round(Number(body.score ?? 0))));
   if (!Number.isFinite(score)) return error(`Score must be between ${MIN_SCORE} and ${MAX_SCORE}`);
   const review: Review = {
     spotId: body.spotId,
-    review: String(body.review ?? ""),
+    review: String(body.review ?? "").slice(0, MAX_REVIEW_LENGTH),
     score,
     date: new Date().toISOString().slice(0, 10),
-    // Server-resolved identity wins; body user_fk is only a fallback so legacy
-    // clients (demo mode) keep attribution without being able to spoof.
-    user_fk: ctx.userId ?? body.user_fk ?? null,
+    user_fk: ctx.userId,
   };
   return withDb(async (db) => {
-    // The spot must exist and the map's allowReviews toggle must permit reviews.
     const spot = await db.collection<Spot>(COLLECTIONS.spots).findOne({ _id: body.spotId as never } as never);
     if (!spot) return error("Spot not found", 404);
     const map = spot.mapId ? await getMap(spot.mapId) : null;
+
+    // Enforce collaboration mode + ban checks.
+    const contrib = await canContribute(ctx, map);
+    if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
+    if (ctx.userId && spot.mapId && (await isBannedOnMap(db, spot.mapId, ctx.userId))) {
+      return error("You are banned from contributing to this map.", 403);
+    }
+
     if (map?.allowReviews === false) {
       return error("Reviews are disabled for this map.", 403);
     }
@@ -52,7 +61,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const ctx = await getOptionalContext(req);
+  const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in to edit a review.", 401);
   const body = await req.json();
   if (!body.id) return error("Missing review id");
@@ -71,7 +80,7 @@ export async function PATCH(req: Request) {
       byIdFilter<Review>(oid),
       {
         $set: {
-          review: String(body.review ?? ""),
+          review: String(body.review ?? "").slice(0, MAX_REVIEW_LENGTH),
           score,
         },
       }
@@ -85,7 +94,7 @@ export async function DELETE(req: Request) {
   const id = searchParams.get("id");
   if (!id) return error("Missing review id");
 
-  const ctx = await getOptionalContext(req);
+  const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in to delete a review.", 401);
 
   return withDb(async (db) => {

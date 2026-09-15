@@ -7,10 +7,12 @@ export default function AdminReportsView({
   reports,
   loadingReports,
   onResolve,
+  canStaff,
 }: {
   reports: AdminReport[];
   loadingReports: boolean;
   onResolve: (r: AdminReport) => void;
+  canStaff: boolean;
 }) {
   return (
     <div className="mt-4">
@@ -36,14 +38,16 @@ export default function AdminReportsView({
                 </div>
                 <div className="italic text-foreground/80">“{r.reason}”</div>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => onResolve(r)}
-              >
-                Resolve
-              </Button>
+              {canStaff && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onResolve(r)}
+                >
+                  Resolve
+                </Button>
+              )}
             </li>
           ))}
         </ul>

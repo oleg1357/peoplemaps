@@ -5,7 +5,6 @@ import Link from "next/link";
 import { PeopleMapsLogo } from "./Logo";
 import { MapCard, type HomeMapCardData } from "./MapCard";
 import { IconMapMarker } from "./icons";
-import { backendLive } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 
@@ -21,56 +20,10 @@ export const HOME_CATEGORIES: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-// Demo-mode cards. Ids match the seeded localStorage maps (lib/demo-data.ts) so
-// "Open map" lands on the right map. Only shown when no backend is configured.
-const DEMO_MAPS: HomeMapCardData[] = [
-  {
-    id: "demo-cph-groceries",
-    title: "Copenhagen Groceries",
-    description:
-      "The best supermarkets and discount shops across Copenhagen, rated by the people who shop there every day.",
-    ownerName: "PeopleMaps Demo",
-    spotCount: 5,
-    accent: "#61C67A",
-    category: "shopping",
-  },
-  {
-    id: "demo-coffee",
-    title: "Best Coffee in Copenhagen",
-    description:
-      "Third-wave coffee spots, hidden cafes and roasteries worth an extra stop on your commute.",
-    ownerName: "Anna K.",
-    spotCount: 4,
-    accent: "#C99A5B",
-    category: "food",
-  },
-  {
-    id: "demo-parks",
-    title: "Hidden Parks & Gardens",
-    description:
-      "Quiet green corners and pocket parks for a sunny lunch or a peaceful afternoon read.",
-    ownerName: "Marcus L.",
-    spotCount: 3,
-    accent: "#4BB0E8",
-    category: "outdoors",
-  },
-  {
-    id: "demo-streetfood",
-    title: "Street Food Favorites",
-    description:
-      "The stalls and food markets locals actually queue for — plus what to order when you get there.",
-    ownerName: "Sofia M.",
-    spotCount: 3,
-    accent: "#F0AD00",
-    category: "food",
-  },
-];
-
 export function HomePage({ liveMaps = [] }: { liveMaps?: HomeMapCardData[] }) {
   // Public maps + their spot counts are resolved server-side (see app/page.tsx)
   // and passed in as props, so the homepage makes no client data requests.
-  // Demo cards only appear when the real backend isn't configured.
-  const allMaps = backendLive ? liveMaps : DEMO_MAPS;
+  const allMaps = liveMaps;
 
   const [category, setCategory] = useState("");
   const filtered =

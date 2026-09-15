@@ -45,6 +45,8 @@ export default function AdminZonesView({
   onRejectAllPendingZones,
   onApproveAllPendingRoutes,
   onRejectAllPendingRoutes,
+  canApprove,
+  canModerate,
 }: {
   zoneData: AdminZoneList | null;
   routeData: AdminRouteList | null;
@@ -71,6 +73,8 @@ export default function AdminZonesView({
   onRejectAllPendingZones: () => void;
   onApproveAllPendingRoutes: () => void;
   onRejectAllPendingRoutes: () => void;
+  canApprove: boolean;
+  canModerate: boolean;
 }) {
   return (
     <div className="mt-4">
@@ -99,7 +103,7 @@ export default function AdminZonesView({
           </h4>
           {backendLive && zoneData && (zoneData.pending > 0 || zoneData.zones.length > 0) && (
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              {zoneData.pending > 0 && (
+              {zoneData.pending > 0 && canApprove && (
                 <>
                   <Button type="button" size="sm" onClick={onApproveAllPendingZones}>
                     Approve all {zoneData.pending} pending zones
@@ -134,6 +138,8 @@ export default function AdminZonesView({
                     }
                     onToggleHidden={() => onToggleZoneHidden(zone)}
                     onDestroy={() => onDestroyZone(zone)}
+                    canApprove={canApprove}
+                    canModerate={canModerate}
                   />
                 ))}
             </ul>
@@ -144,7 +150,7 @@ export default function AdminZonesView({
           </h4>
           {backendLive && routeData && (routeData.pending > 0 || routeData.routes.length > 0) && (
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              {routeData.pending > 0 && (
+              {routeData.pending > 0 && canApprove && (
                 <>
                   <Button type="button" size="sm" onClick={onApproveAllPendingRoutes}>
                     Approve all {routeData.pending} pending routes
@@ -179,6 +185,8 @@ export default function AdminZonesView({
                     }
                     onToggleHidden={() => onToggleRouteHidden(route)}
                     onDestroy={() => onDestroyRoute(route)}
+                    canApprove={canApprove}
+                    canModerate={canModerate}
                   />
                 ))}
             </ul>

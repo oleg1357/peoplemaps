@@ -38,6 +38,8 @@ export default function AdminSpotView({
   onBatch,
   creatorFilter,
   onClearCreatorFilter,
+  canApprove,
+  canModerate,
 }: {
   activeMap: AdminMapEntry;
   data: AdminSpotList | null;
@@ -55,6 +57,8 @@ export default function AdminSpotView({
   onBatch: (action: BatchModerationAction, ids: string[]) => void;
   creatorFilter?: string | null;
   onClearCreatorFilter?: () => void;
+  canApprove: boolean;
+  canModerate: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -200,7 +204,7 @@ export default function AdminSpotView({
             <Button
               type="button"
               size="sm"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || !canApprove}
               onClick={() => runBatch("approve")}
             >
               Approve
@@ -209,7 +213,7 @@ export default function AdminSpotView({
               type="button"
               size="sm"
               variant="destructive"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || !canApprove}
               onClick={() => runBatch("reject")}
             >
               Reject
@@ -218,7 +222,7 @@ export default function AdminSpotView({
               type="button"
               size="sm"
               variant="outline"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || !canModerate}
               onClick={() => runBatch("hide")}
             >
               Hide
@@ -227,7 +231,7 @@ export default function AdminSpotView({
               type="button"
               size="sm"
               variant="outline"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || !canModerate}
               onClick={() => runBatch("restore")}
             >
               Restore
@@ -272,6 +276,8 @@ export default function AdminSpotView({
                   }
                   onToggleHidden={() => onToggleHidden(spot)}
                   onDestroy={() => onDestroy(spot)}
+                  canApprove={canApprove}
+                  canModerate={canModerate}
                 />
               ))}
             </ul>

@@ -18,6 +18,9 @@ export const DEMO_MAP_IDS = {
   coffee: "demo-coffee",
   parks: "demo-parks",
   streetfood: "demo-streetfood",
+  streetart: "demo-street-art",
+  water: "demo-water",
+  latenight: "demo-late-night",
 } as const;
 
 export const DEMO_DEFAULT_ACCENT = "#61C67A";
@@ -131,6 +134,86 @@ export const DEMO_MAPS: MapDocument[] = [
     category: "food",
     tags: "streetfood, market, stalls",
   },
+  // No-account maps: owned by no one, maintained by the community. `ownerId` /
+  // `ownerName` are intentionally omitted so the maps are not tied to any user.
+  {
+    _id: DEMO_MAP_IDS.streetart,
+    _createdAt: "2025-06-15T09:00:00.000Z",
+    title: "Copenhagen Graffiti & Street Art",
+    description:
+      "Murals, paste-ups and pieces worth a detour — the city's open-air gallery changes constantly, so check back often.",
+    isPublic: "public",
+    baseCenter: { lat: 55.685, lng: 12.5495 },
+    baseZoom: 13,
+    accentColor: "#9B6BF0",
+    defaultMarker: "🎨",
+    defaultMarkerColor: "#9B6BF0",
+    welcomeMessage: "Spot something new? Add it — artist credits are a bonus.",
+    submissionNote: "Mention the artist or collective if you know it.",
+    maxPhotosPerSpot: 6,
+    requireApproval: false,
+    allowReviews: true,
+    allowComments: true,
+    allowPhotos: true,
+    collaborationMode: "anyone",
+    enableClustering: true,
+    choroplethRamp: "sequential",
+    choroplethMetric: "rating",
+    category: "arts",
+    tags: "streetart, graffiti, murals",
+  },
+  {
+    _id: DEMO_MAP_IDS.water,
+    _createdAt: "2025-06-22T09:00:00.000Z",
+    title: "Copenhagen Public Water Fountains",
+    description:
+      "Free, safe drinking fountains for refills — mapped by the community so your bottle never runs dry.",
+    isPublic: "public",
+    baseCenter: { lat: 55.68, lng: 12.567 },
+    baseZoom: 13,
+    accentColor: "#3BB0A0",
+    defaultMarker: "🚰",
+    defaultMarkerColor: "#3BB0A0",
+    welcomeMessage: "Keep the taps flowing — add fountains you've drunk from.",
+    submissionNote: "Roughly right is fine; note unusual taste or trickles in the tip.",
+    maxPhotosPerSpot: 6,
+    requireApproval: false,
+    allowReviews: true,
+    allowComments: true,
+    allowPhotos: true,
+    collaborationMode: "anyone",
+    enableClustering: false,
+    choroplethRamp: "diverging",
+    choroplethMetric: "rating",
+    category: "outdoors",
+    tags: "water, fountains, refill",
+  },
+  {
+    _id: DEMO_MAP_IDS.latenight,
+    _createdAt: "2025-07-03T09:00:00.000Z",
+    title: "Late Night Eats",
+    description:
+      "Open past midnight — falafel, pizza and more for the after-hours crowd across Copenhagen.",
+    isPublic: "public",
+    baseCenter: { lat: 55.6695, lng: 12.5592 },
+    baseZoom: 13,
+    accentColor: "#FF8A3D",
+    defaultMarker: "🌙",
+    defaultMarkerColor: "#FF8A3D",
+    welcomeMessage: "The late kitchen finds that keep the city going after midnight.",
+    submissionNote: "Add real closing times — 'close enough' isn't a time.",
+    maxPhotosPerSpot: 6,
+    requireApproval: false,
+    allowReviews: true,
+    allowComments: true,
+    allowPhotos: true,
+    collaborationMode: "anyone",
+    enableClustering: false,
+    choroplethRamp: "sequential",
+    choroplethMetric: "priceLevel",
+    category: "food",
+    tags: "late-night, kebab, pizza, open-late",
+  },
 ];
 
 // ---- Seed content ----
@@ -167,15 +250,32 @@ const streetfoodSeeds: DemoSpotSeed[] = [
   { _id: "demo-spot-s2", name: "Kødbyens Hal 7", street: "Høkerboderne 19", city: "Copenhagen", zip: 1712, lat: 55.6686, lng: 12.5592, priceLevel: 2, hoursNote: "Daily 08–00", tags: ["market", "burgers"], tip: "Hija de Sánchez tacos on weekends.", status: "open", marker: "🌭", markerColor: "#F0AD00", mapId: DEMO_MAP_IDS.streetfood },
   { _id: "demo-spot-s3", name: "Døp", street: "Gråbrødretorv 8", city: "Copenhagen", zip: 1154, lat: 55.6806, lng: 12.5751, priceLevel: 1, hoursNote: "Daily 11–21", tags: ["hotdogs", "organic"], tip: "Get the bacon wrap, skip the sauce.", status: "open", marker: "🌭", markerColor: "#F0AD00", mapId: DEMO_MAP_IDS.streetfood },
 ];
+// No-account spots: submitted by no one, so `createdBy` is explicitly null and
+// reviewers/photo uploaders render as "Anonymous" (see MapsHomePage).
+const communitySeeds: DemoSpotSeed[] = [
+  // street art
+  { _id: "demo-spot-a1", name: "Superkilen Public Art", street: "Nørrebrogade 220", city: "Copenhagen", zip: 2200, lat: 55.6934, lng: 12.5495, priceLevel: 0, hoursNote: "Always open", tags: ["public-art", "square"], tip: "The red square has giant objects from 50+ countries.", status: "open", marker: "🎨", markerColor: "#9B6BF0", createdBy: null, mapId: DEMO_MAP_IDS.streetart },
+  { _id: "demo-spot-a2", name: "Sorte Firkant Mural", street: "Gammel Køge Landevej 17", city: "Copenhagen", zip: 2500, lat: 55.6685, lng: 12.5397, priceLevel: 0, hoursNote: "Always open", tags: ["mural", "railway"], tip: "Painted along the abandoned rail corridor — best at golden hour.", status: "open", marker: "🎨", markerColor: "#9B6BF0", createdBy: null, mapId: DEMO_MAP_IDS.streetart },
+  { _id: "demo-spot-a3", name: "Værnedamsvej Paste-ups", street: "Værnedamsvej 3", city: "Copenhagen", zip: 1619, lat: 55.6723, lng: 12.5597, priceLevel: 0, hoursNote: "Always open", tags: ["paste-up", "facade"], tip: "Façades rotate every few months — new artists each season.", status: "open", marker: "🎨", markerColor: "#9B6BF0", createdBy: null, mapId: DEMO_MAP_IDS.streetart },
+  // water
+  { _id: "demo-spot-w1", name: "Islands Brygge Harbourside Fountain", street: "Islands Brygge 6", city: "Copenhagen", zip: 2300, lat: 55.6518, lng: 12.5788, priceLevel: 0, hoursNote: "Always open", tags: ["harbour", "refill"], tip: "Pair it with a dip in the harbour bath.", status: "open", marker: "🚰", markerColor: "#3BB0A0", createdBy: null, mapId: DEMO_MAP_IDS.water },
+  { _id: "demo-spot-w2", name: "King's Garden Fountain", street: "Gothersgade 128", city: "Copenhagen", zip: 1123, lat: 55.6852, lng: 12.5777, priceLevel: 0, hoursNote: "Daily 07–22", tags: ["park", "roses"], tip: "Central water source beside the rose beds.", status: "open", marker: "🚰", markerColor: "#3BB0A0", createdBy: null, mapId: DEMO_MAP_IDS.water },
+  { _id: "demo-spot-w3", name: "Nørrebroparken Drinking Fountain", street: "Nørrebrogade 210", city: "Copenhagen", zip: 2200, lat: 55.6999, lng: 12.5589, priceLevel: 0, hoursNote: "Always open", tags: ["park", "jogging"], tip: "A quick stop on the morning run loop.", status: "open", marker: "🚰", markerColor: "#3BB0A0", createdBy: null, mapId: DEMO_MAP_IDS.water },
+  // late night
+  { _id: "demo-spot-l1", name: "Midnight Falafel", street: "Istedgade 42", city: "Copenhagen", zip: 1650, lat: 55.6681, lng: 12.5504, priceLevel: 1, hoursNote: "Fri–Sat to 03:00", tags: ["falafel", "open-late"], tip: "Falafel pita with extra pickles, every time.", status: "open", marker: "🌙", markerColor: "#FF8A3D", createdBy: null, mapId: DEMO_MAP_IDS.latenight },
+  { _id: "demo-spot-l2", name: "The 24/7 Kiosk", street: "Nørrebrogade 86", city: "Copenhagen", zip: 2200, lat: 55.689, lng: 12.5485, priceLevel: 1, hoursNote: "Open 24 hours", tags: ["kiosk", "snacks"], tip: "Cold drinks and warm sausage rolls at 4am.", status: "open", marker: "🌙", markerColor: "#FF8A3D", createdBy: null, mapId: DEMO_MAP_IDS.latenight },
+  { _id: "demo-spot-l3", name: "Late Slice Pizzeria", street: "Amagerbrogade 19", city: "Copenhagen", zip: 2300, lat: 55.6639, lng: 12.602, priceLevel: 2, hoursNote: "Daily to 02:00", tags: ["pizza", "open-late"], tip: "Ask for the pepperoni by-the-slice window.", status: "open", marker: "🌙", markerColor: "#FF8A3D", createdBy: null, mapId: DEMO_MAP_IDS.latenight },
+];
 
 export const DEMO_SPOTS: Spot[] = [
   ...groceriesSeeds,
   ...coffeeSeeds,
   ...parksSeeds,
   ...streetfoodSeeds,
+  ...communitySeeds,
 ].map((s, idx) => ({
   ...s,
-  createdBy: String((idx % 4) + 1),
+  createdBy: s.createdBy ?? String((idx % 4) + 1),
   createdAt: new Date(Date.UTC(2025, 3 + (idx % 12), 5 + idx, 10, 0, 0)).toISOString(),
   moderation: "approved" as const,
   hidden: false,
@@ -192,12 +292,21 @@ export const DEMO_REVIEWS: Review[] = [
   { _id: "demo-review-8", spotId: "demo-spot-p2", review: "Lovely roses, but busier than you'd hope.", score: 4, date: "2025-07-21", user_fk: "1" },
   { _id: "demo-review-9", spotId: "demo-spot-s1", review: "Soulbirds pizza alone is worth the trip across the harbour.", score: 5, date: "2025-06-28", user_fk: "2" },
   { _id: "demo-review-10", spotId: "demo-spot-s2", review: "Huge hall, tons of choice, seats go fast.", score: 4, date: "2025-07-05", user_fk: "4" },
+  // No-account map reviews (anonymous authors)
+  { _id: "demo-review-11", spotId: "demo-spot-a1", review: "The whole Superkilen stretch is an art gallery you can walk through.", score: 5, date: "2025-07-15", user_fk: null },
+  { _id: "demo-review-12", spotId: "demo-spot-a2", review: "Sorte Firkant changes constantly — always something new to spot.", score: 4, date: "2025-08-03", user_fk: null },
+  { _id: "demo-review-13", spotId: "demo-spot-a3", review: "Small but beautiful paste-ups; the rotation keeps it fresh.", score: 4, date: "2025-08-12", user_fk: null },
+  { _id: "demo-review-14", spotId: "demo-spot-w1", review: "Cold, clean, and right by the harbour bath. Perfect.", score: 5, date: "2025-07-22", user_fk: null },
+  { _id: "demo-review-15", spotId: "demo-spot-w3", review: "Reliable pressure — good enough for a mid-run refill.", score: 4, date: "2025-08-01", user_fk: null },
+  { _id: "demo-review-16", spotId: "demo-spot-l1", review: "Best late falafel in town, hands down.", score: 5, date: "2025-07-29", user_fk: null },
+  { _id: "demo-review-17", spotId: "demo-spot-l3", review: "Saved us after the late train home.", score: 4, date: "2025-08-10", user_fk: null },
 ];
 
 export const DEMO_COMMENTS: ReviewComment[] = [
   { _id: "demo-comment-1", reviewId: "demo-review-4", parentId: null, user_fk: "2", date: "2025-06-01", text: "Try their beans at home too — the bag lasts forever." },
   { _id: "demo-comment-2", reviewId: "demo-review-4", parentId: "demo-comment-1", user_fk: "1", date: "2025-06-02", text: "Good tip, thanks!" },
   { _id: "demo-comment-3", reviewId: "demo-review-9", parentId: null, user_fk: "3", date: "2025-06-29", text: "Second that — the Diavola is great." },
+  { _id: "demo-comment-4", reviewId: "demo-review-11", parentId: null, user_fk: null, date: "2025-07-16", text: "Bonus tip — the basketball court next to Superkilen is lit at night." },
 ];
 
 function svgPhoto(fill: string, label: string): string {
@@ -214,6 +323,10 @@ export const DEMO_PHOTOS: SpotPhoto[] = [
   { _id: "demo-photo-2", spotId: "demo-spot-c1", date: "2025-05-30", uploader_fk: "1", dataUrl: svgPhoto("#C99A5B", "Fresh pull") },
   { _id: "demo-photo-3", spotId: "demo-spot-p1", date: "2025-05-10", uploader_fk: "3", dataUrl: svgPhoto("#4BB0E8", "Cherry blossom walk") },
   { _id: "demo-photo-4", spotId: "demo-spot-s1", date: "2025-06-28", uploader_fk: "2", dataUrl: svgPhoto("#F0AD00", "Harbour pizzas") },
+  // No-account map photos (anonymous uploaders)
+  { _id: "demo-photo-5", spotId: "demo-spot-a1", date: "2025-07-15", uploader_fk: null, dataUrl: svgPhoto("#9B6BF0", "Superkilen columns") },
+  { _id: "demo-photo-6", spotId: "demo-spot-w1", date: "2025-07-22", uploader_fk: null, dataUrl: svgPhoto("#3BB0A0", "Harbour refill") },
+  { _id: "demo-photo-7", spotId: "demo-spot-l1", date: "2025-07-29", uploader_fk: null, dataUrl: svgPhoto("#FF8A3D", "Falafel till late") },
 ];
 
 export const DEMO_ZONES: Zone[] = [
@@ -257,6 +370,62 @@ export const DEMO_ZONES: Zone[] = [
     moderation: "approved",
     hidden: false,
   },
+  // No-account map zones
+  {
+    _id: "demo-zone-3",
+    mapId: DEMO_MAP_IDS.streetart,
+    name: "Nørrebro art corridor",
+    shape: "polygon",
+    points: [
+      [55.6981, 12.5449],
+      [55.6926, 12.5612],
+      [55.689, 12.5512],
+      [55.6934, 12.5449],
+    ],
+    color: "#9B6BF0",
+    value: 4.3,
+    valueCount: 11,
+    valueUpdatedAt: "2025-08-01T09:00:00.000Z",
+    description: "The densest stretch of murals and paste-ups in the city.",
+    createdBy: null,
+    createdAt: "2025-07-10T09:00:00.000Z",
+    moderation: "approved",
+    hidden: false,
+  },
+  {
+    _id: "demo-zone-4",
+    mapId: DEMO_MAP_IDS.water,
+    name: "Inner-city refill ring",
+    shape: "circle",
+    center: [55.6789, 12.5734],
+    radius: 900,
+    color: "#3BB0A0",
+    value: 4.6,
+    valueCount: 27,
+    valueUpdatedAt: "2025-07-20T09:00:00.000Z",
+    description: "Most of the inner-city fountains sit inside this ring.",
+    createdBy: null,
+    createdAt: "2025-07-01T09:00:00.000Z",
+    moderation: "approved",
+    hidden: false,
+  },
+  {
+    _id: "demo-zone-5",
+    mapId: DEMO_MAP_IDS.latenight,
+    name: "Vesterbro after dark",
+    shape: "circle",
+    center: [55.6681, 12.5504],
+    radius: 800,
+    color: "#FF8A3D",
+    value: 1.6,
+    valueCount: 18,
+    valueUpdatedAt: "2025-07-25T09:00:00.000Z",
+    description: "The densest late-night kitchen cluster in the city.",
+    createdBy: null,
+    createdAt: "2025-07-12T09:00:00.000Z",
+    moderation: "approved",
+    hidden: false,
+  },
 ];
 
 // Choropleth data range for the demo overlay (min/max across valued zones).
@@ -278,6 +447,23 @@ export const DEMO_ROUTES: Route[] = [
     description: "Four roasteries in one afternoon — starts at Godsbanen.",
     createdBy: "2",
     createdAt: "2025-06-20T09:00:00.000Z",
+    moderation: "approved",
+    hidden: false,
+  },
+  {
+    _id: "demo-route-2",
+    mapId: DEMO_MAP_IDS.streetart,
+    name: "Street art loop",
+    points: [
+      [55.6934, 12.5495],
+      [55.6852, 12.5777],
+      [55.6723, 12.5597],
+      [55.6685, 12.5397],
+    ],
+    color: "#9B6BF0",
+    description: "Three neighbourhoods of outdoor art in one afternoon walk.",
+    createdBy: null,
+    createdAt: "2025-07-15T09:00:00.000Z",
     moderation: "approved",
     hidden: false,
   },

@@ -1,6 +1,6 @@
 // Shared types for the MongoDB-backed coordination + spots layer.
 
-import type { MapRoleType } from "@/lib/roles";
+import type { MapCapability, MapRoleType } from "@/lib/roles";
 
 export type SpotStatus = "open" | "closed" | "unknown";
 
@@ -132,12 +132,15 @@ export interface ReviewVote {
 // A designated team member of a map. One document per (mapId, userId) pair.
 // Roles grant capabilities (see lib/roles.ts): viewers are read-only, reviewers
 // can approve/reject pending content, moderators get full content control.
+// Fully granular PAM: an explicit `capabilities` array overrides the role
+// preset, so an owner can grant any exact subset to a member.
 // Legacy rows without a `role` field behave as "moderator".
 export interface MapRole {
   _id?: string;
   mapId: string; // Sanity map document _id
   userId: string; // Supabase user id of the team member
-  role?: MapRoleType; // viewer | reviewer | moderator
+  role?: MapRoleType; // viewer | reviewer | moderator (preset label)
+  capabilities?: MapCapability[] | null; // explicit granular grants (overrides preset)
   displayName?: string; // human-readable name captured at assignment time
   addedBy: string; // Supabase user id of the owner who assigned them
   addedAt: string; // ISO timestamp

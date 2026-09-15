@@ -4,9 +4,8 @@ import { MAP_PROJECTION } from "@/sanity/lib/queries";
 import { getDb, COLLECTIONS } from "@/lib/mongodb";
 import type { MapDocument, MapRole } from "@/lib/types";
 import {
-  roleHasCapability,
+  capabilitiesForMember,
   type MapCapability,
-  type MapRoleType,
 } from "@/lib/roles";
 
 // Comma-separated Supabase user ids with global super-admin rights, e.g.
@@ -117,31 +116,23 @@ export async function getMapRole(
   }
 }
 
-// The user's role on a map, or null when they have no team role. Legacy rows
-// (created before roles existed) default to "moderator".
-export async function getMapRoleType(
+// The user's effective (fully granular) grants on a map. Owners and admins are
+// handled by the callers (they short-circuit before this runs); team members
+// get their explicit `capabilities` when present, otherwise the role preset.
+// Returns null when the user has no team row (no access).
+export async function getEffectiveCapabilities(
   mapId: string,
   userId: string
-): Promise<MapRoleType | null> {
+): Promise<MapCapability[] | null> {
   const role = await getMapRole(mapId, userId);
   if (!role) return null;
-  return role.role ?? "moderator";
-}
-
-// True when the user has a team role in the given set on the map. Used by the
-// public submission paths ("invitedOnly" collaboration, auto-approval).
-export async function hasMapRole(
-  mapId: string,
-  userId: string,
-  roles: MapRoleType[]
-): Promise<boolean> {
-  const type = await getMapRoleType(mapId, userId);
-  return Boolean(type && roles.includes(type));
+  return capabilitiesForMember(role);
 }
 
 // Capability check (the core of the IAM model). Owners and global admins have
-// every capability; team members get whatever their role grants. Callers pass
-// the specific capability they need rather than a blanket "moderator" check.
+// every capability; team members are granted whatever their role preset OR
+// explicit per-member `capabilities` give them. Callers pass the specific
+// capability they need rather than a blanket "moderator" check.
 export async function canOnMap(
   ctx: AdminContext,
   mapId: string,
@@ -162,8 +153,8 @@ export async function canOnMap(
     return { ok: false, reason: "Only the map owner can do that." };
   }
 
-  const role = await getMapRoleType(mapId, ctx.userId);
-  if (role && roleHasCapability(role, capability)) return { ok: true };
+  const caps = await getEffectiveCapabilities(mapId, ctx.userId);
+  if (caps && caps.includes(capability)) return { ok: true };
 
   return { ok: false, reason: "You don't have permission to do that on this map." };
 }
@@ -198,14 +189,27 @@ export async function canManageMap(
   return { ok: false, reason: "Only the map owner can do that." };
 }
 
-// Whether the given user has the "moderator" team role for the given map.
-// (Legacy role rows without an explicit role field count as moderators.)
-export async function isMapModerator(
-  mapId: string,
-  userId: string
-): Promise<boolean> {
-  const role = await getMapRole(mapId, userId);
-  return Boolean(role && (role.role ?? "moderator") === "moderator");
+// Enforce a map's collaboration mode for content contributions (spots, zones,
+// routes, photos, reviews, comments).  "anyone" => open; "loggedIn" =>
+// signed-in required; "invitedOnly" => owner / global-admin or a team member
+// holding the "approve" capability.
+export async function canContribute(
+  ctx: AdminContext,
+  map: MapDocument | null
+): Promise<{ ok: boolean; reason?: string }> {
+  const mode = map?.collaborationMode ?? "loggedIn";
+  if (mode !== "anyone" && !ctx.userId) {
+    return { ok: false, reason: "You must be signed in to contribute." };
+  }
+  if (mode === "invitedOnly") {
+    if (!map) return { ok: false, reason: "Map not found." };
+    if (!ctx.userId) return { ok: false, reason: "You must be signed in to contribute." };
+    if (ctx.isGlobalAdmin || map.ownerId === ctx.userId) return { ok: true };
+    const caps = await getEffectiveCapabilities(map._id, ctx.userId);
+    if (caps && caps.includes("approve")) return { ok: true };
+    return { ok: false, reason: "Only the map owner and moderators can contribute to this map." };
+  }
+  return { ok: true };
 }
 
 // Team-role entries for a map (used by owners to manage their team).

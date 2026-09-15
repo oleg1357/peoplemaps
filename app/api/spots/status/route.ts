@@ -1,5 +1,7 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter, getOptionalContext } from "@/lib/api";
+import { withDb, json, error, toObjectId, byIdFilter, rateLimitByIp } from "@/lib/api";
+import { getAdminContext, canModerateMap } from "@/lib/admin";
+import { isBannedOnMap } from "@/lib/api";
 import type { Spot } from "@/lib/types";
 
 // GET /api/spots/status?spotId=<id>
@@ -17,9 +19,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Identity always comes from the session cookie, never the request body.
-  const ctx = await getOptionalContext(req);
-  if (!ctx.userId) {
+  const lim = await rateLimitByIp(req, 20, 60_000, "spot-status");
+  if (!lim.ok) return error("Too many requests. Try again shortly.", 429);
+  const ctx = await getAdminContext(req);
+  const userId = ctx.userId;
+  if (!userId) {
     return error("You must be signed in to update a spot's status.", 401);
   }
   const body = await req.json();
@@ -31,9 +35,20 @@ export async function POST(req: Request) {
   return withDb(async (db) => {
     const oid = toObjectId(body.spotId);
     if (!oid) return error("Invalid spot id");
-    await db
-      .collection<Spot>(COLLECTIONS.spots)
-      .updateOne(byIdFilter<Spot>(oid), { $set: { status } });
+    const col = db.collection<Spot>(COLLECTIONS.spots);
+    const existing = await col.findOne(byIdFilter<Spot>(oid), {
+      projection: { mapId: 1, createdBy: 1 },
+    });
+    if (!existing) return error("Spot not found", 404);
+    if (await isBannedOnMap(db, existing.mapId, userId)) {
+      return error("You are banned from contributing to this map.", 403);
+    }
+    // The spot's author may update the status; otherwise a moderator is required.
+    if (existing.createdBy !== userId) {
+      const perm = await canModerateMap(ctx, existing.mapId);
+      if (!perm.ok) return error("You can only update the status of your own spots.", 403);
+    }
+    await col.updateOne(byIdFilter<Spot>(oid), { $set: { status } });
     return json({ status });
   });
 }

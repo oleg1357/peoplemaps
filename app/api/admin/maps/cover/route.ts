@@ -44,9 +44,11 @@ export async function POST(req: Request) {
       })
       .commit();
     return json({ ok: true, assetId: asset._id, url: asset.url });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Sanity error";
-    return json({ error: `Failed to upload cover image: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Failed to upload cover image. Please try again." },
+      { status: 500 }
+    );
   }
 }
 
@@ -69,8 +71,10 @@ export async function DELETE(req: Request) {
       .unset(["coverImage"])
       .commit();
     return json({ ok: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown Sanity error";
-    return json({ error: `Failed to remove cover image: ${message}` }, { status: 500 });
+  } catch {
+    return json(
+      { error: "Failed to remove cover image. Please try again." },
+      { status: 500 }
+    );
   }
 }

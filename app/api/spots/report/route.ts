@@ -1,10 +1,12 @@
 import { COLLECTIONS } from "@/lib/mongodb";
-import { withDb, json, error, toObjectId, byIdFilter } from "@/lib/api";
+import { withDb, json, error, toObjectId, byIdFilter, rateLimitByIp } from "@/lib/api";
 import { getAdminContext } from "@/lib/admin";
 import type { Spot, SpotReport } from "@/lib/types";
 
 // POST /api/spots/report { spotId, reason } -> flag a spot for moderator review
 export async function POST(req: Request) {
+  const lim = await rateLimitByIp(req, 5, 60_000, "spot-reports");
+  if (!lim.ok) return error("Too many reports. Try again shortly.", 429);
   const ctx = await getAdminContext(req);
   if (!ctx.userId) return error("You must be signed in to report a spot.", 401);
   const reporterId = ctx.userId;
