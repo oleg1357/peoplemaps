@@ -21,6 +21,10 @@ export interface Spot {
   lng: number;
   createdBy?: string | null; // supabase user id
   createdAt: string;
+  // Last content update / freshness verification. `updatedAt` — set on create,
+  // edit and "mark as verified" — feeds the staleness badge (`staleAfterDays`).
+  updatedAt?: string | null;
+  lastVerifiedAt?: string | null;
   status?: SpotStatus;
   // Marker look (emoji + color). Falls back to the map's defaults when unset.
   marker?: string | null;
@@ -183,6 +187,44 @@ export interface MapDocument {
   // the spots inside a zone when the zone has no explicit `value`.
   choroplethRamp?: "sequential" | "diverging" | null;
   choroplethMetric?: "priceLevel" | "rating" | null;
+  // Freshness / data quality. `staleAfterDays` = days before a spot is shown
+  // as "needs verification" (0 = off); `requireSpotFields` = built-in fields a
+  // new spot must include; `defaultSpotStatus` is applied to new submissions.
+  staleAfterDays?: number | null;
+  requireSpotFields?: string[] | null;
+  suggestedTags?: string | null;
+  allowDuplicateSpots?: boolean | null;
+  defaultSpotStatus?: "open" | "closed" | "unknown" | null;
+  // Governance. `freezeSubmissions` locks the map; `requireLoginToReview` gates
+  // ratings/reviews/comments/votes; `maxReviewsPerSpotPerUser` caps reviews
+  // (0 = unlimited); `collaborationDraw` controls who may draw zones/routes;
+  // `trustedContributorIds` (comma separated) skip the approval queue;
+  // `submissionCooldown` is the seconds a visitor must wait between submits.
+  freezeSubmissions?: boolean | null;
+  requireLoginToReview?: boolean | null;
+  maxReviewsPerSpotPerUser?: number | null;
+  collaborationDraw?: "anyone" | "loggedIn" | "invitedOnly" | null;
+  trustedContributorIds?: string | null;
+  submissionCooldown?: number | null;
+  // Map experience defaults.
+  tiles?: "osm" | "satellite" | "dark" | null;
+  minZoom?: number | null;
+  maxZoom?: number | null;
+  restrictPan?: boolean | null;
+  defaultSpotSort?: "newest" | "rating" | "name" | null;
+  defaultLayerSpots?: boolean | null;
+  defaultLayerZones?: boolean | null;
+  defaultLayerRoutes?: boolean | null;
+  defaultLayerHeat?: boolean | null;
+  defaultLayerChoropleth?: boolean | null;
+  zoomToUser?: boolean | null;
+  // Identity / discovery. Draft maps and maps with `showOnHomepage: false`
+  // are hidden from the homepage discovery list.
+  status?: "draft" | "published" | null;
+  showOnHomepage?: boolean | null;
+  mapEmoji?: string | null;
+  region?: string | null;
+  announcement?: string | null;
   // Discovery: primary category + comma-separated tag keywords.
   category?: string | null;
   tags?: string | null;

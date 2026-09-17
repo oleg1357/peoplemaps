@@ -73,6 +73,11 @@ async function fetchLiveMaps(): Promise<HomeMapCardData[]> {
       PUBLIC_MAPS_QUERY
     )) ?? [];
 
+    // Draft maps and maps hidden from the homepage stay out of discovery.
+    const visible = maps.filter(
+      (m) => m.status !== "draft" && m.showOnHomepage !== false
+    );
+
     // One aggregated Mongo call for the publicly visible spot totals (approved
     // or pre-moderation, not hidden) — matches what the map view shows.
     const counts: Record<string, number> = {};
@@ -93,7 +98,7 @@ async function fetchLiveMaps(): Promise<HomeMapCardData[]> {
       for (const r of rows) counts[r._id] = r.count;
     }
 
-    return maps.map((m) => ({
+    return visible.map((m) => ({
       id: m._id,
       slug: m.slug ?? undefined,
       title: m.title,

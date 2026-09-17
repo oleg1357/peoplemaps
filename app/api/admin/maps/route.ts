@@ -224,6 +224,16 @@ export async function POST(req: Request) {
     ? String(body.collaborationMode)
     : "loggedIn";
   const enableClustering = body.enableClustering === true;
+  const choroplethRamp = ["sequential", "diverging"].includes(
+    String(body.choroplethRamp)
+  )
+    ? String(body.choroplethRamp)
+    : "sequential";
+  const choroplethMetric = ["priceLevel", "rating"].includes(
+    String(body.choroplethMetric)
+  )
+    ? String(body.choroplethMetric)
+    : "priceLevel";
 
   const category = ["food", "sights", "shopping", "outdoors", "nightlife", "arts", "sports", "other"].includes(
     String(body.category)
@@ -260,6 +270,47 @@ export async function POST(req: Request) {
       allowPhotos,
       collaborationMode,
       enableClustering,
+      choroplethRamp,
+      choroplethMetric,
+      staleAfterDays: clampNum(body.staleAfterDays, 0, 365, 0),
+      requireSpotFields: (Array.isArray(body.requireSpotFields) ? body.requireSpotFields : []).filter((f: unknown) =>
+        ["street", "city", "priceLevel", "hoursNote", "tags", "tip"].includes(String(f))
+      ),
+      suggestedTags: String(body.suggestedTags ?? "").slice(0, 200),
+      allowDuplicateSpots: toBool(body.allowDuplicateSpots) !== false,
+      defaultSpotStatus: ["open", "closed", "unknown"].includes(String(body.defaultSpotStatus))
+        ? String(body.defaultSpotStatus)
+        : "unknown",
+      freezeSubmissions: toBool(body.freezeSubmissions),
+      requireLoginToReview: toBool(body.requireLoginToReview),
+      maxReviewsPerSpotPerUser: clampNum(body.maxReviewsPerSpotPerUser, 0, 50, 1),
+      collaborationDraw: ["anyone", "loggedIn", "invitedOnly"].includes(String(body.collaborationDraw))
+        ? String(body.collaborationDraw)
+        : "loggedIn",
+      trustedContributorIds: String(body.trustedContributorIds ?? "").slice(0, 2000),
+      submissionCooldown: clampNum(body.submissionCooldown, 0, 3600, 0),
+      tiles: ["osm", "satellite", "dark"].includes(String(body.tiles))
+        ? String(body.tiles)
+        : "osm",
+      minZoom: clampNum(body.minZoom, 1, 18, 3),
+      maxZoom: clampNum(body.maxZoom, 3, 19, 18),
+      restrictPan: toBool(body.restrictPan),
+      defaultSpotSort: ["newest", "rating", "name"].includes(String(body.defaultSpotSort))
+        ? String(body.defaultSpotSort)
+        : "newest",
+      defaultLayerSpots: toBool(body.defaultLayerSpots) !== false,
+      defaultLayerZones: toBool(body.defaultLayerZones) !== false,
+      defaultLayerRoutes: toBool(body.defaultLayerRoutes) !== false,
+      defaultLayerHeat: toBool(body.defaultLayerHeat),
+      defaultLayerChoropleth: toBool(body.defaultLayerChoropleth) !== false,
+      zoomToUser: toBool(body.zoomToUser),
+      status: ["draft", "published"].includes(String(body.status))
+        ? String(body.status)
+        : "published",
+      showOnHomepage: toBool(body.showOnHomepage) !== false,
+      mapEmoji: String(body.mapEmoji ?? "").trim().slice(0, 16),
+      region: String(body.region ?? "").trim().slice(0, 80),
+      announcement: String(body.announcement ?? "").trim().slice(0, 400),
       category,
       tags,
     });
@@ -382,6 +433,131 @@ export async function PATCH(req: Request) {
   if (input.enableClustering !== undefined) {
     patch.enableClustering = input.enableClustering === true;
   }
+  if (input.choroplethRamp !== undefined) {
+    if (
+      input.choroplethRamp !== null &&
+      !["sequential", "diverging"].includes(String(input.choroplethRamp))
+    ) {
+      return json({ error: "Invalid choropleth ramp." }, { status: 400 });
+    }
+    patch.choroplethRamp = input.choroplethRamp === null ? null : String(input.choroplethRamp);
+  }
+  if (input.choroplethMetric !== undefined) {
+    if (
+      input.choroplethMetric !== null &&
+      !["priceLevel", "rating"].includes(String(input.choroplethMetric))
+    ) {
+      return json({ error: "Invalid choropleth metric." }, { status: 400 });
+    }
+    patch.choroplethMetric = input.choroplethMetric === null ? null : String(input.choroplethMetric);
+  }
+  // ---- Freshness / data quality ----
+  if (input.staleAfterDays !== undefined) {
+    const n = clampNum(input.staleAfterDays, 0, 365, 0);
+    if (!Number.isFinite(Number(input.staleAfterDays))) {
+      return json({ error: "Invalid staleness threshold." }, { status: 400 });
+    }
+    patch.staleAfterDays = n;
+  }
+  if (input.requireSpotFields !== undefined) {
+    const allowed = ["street", "city", "priceLevel", "hoursNote", "tags", "tip"];
+    if (!Array.isArray(input.requireSpotFields)) {
+      return json({ error: "Invalid required spot fields." }, { status: 400 });
+    }
+    const fields = (input.requireSpotFields as unknown[])
+      .filter((f) => allowed.includes(String(f)));
+    patch.requireSpotFields = [...new Set(fields)];
+  }
+  if (input.suggestedTags !== undefined) {
+    patch.suggestedTags = String(input.suggestedTags ?? "").slice(0, 200);
+  }
+  if (input.allowDuplicateSpots !== undefined) {
+    patch.allowDuplicateSpots = toBool(input.allowDuplicateSpots);
+  }
+  if (input.defaultSpotStatus !== undefined) {
+    if (input.defaultSpotStatus !== null && !["open", "closed", "unknown"].includes(String(input.defaultSpotStatus))) {
+      return json({ error: "Invalid default spot status." }, { status: 400 });
+    }
+    patch.defaultSpotStatus = input.defaultSpotStatus === null ? null : String(input.defaultSpotStatus);
+  }
+  // ---- Governance ----
+  if (input.freezeSubmissions !== undefined) {
+    patch.freezeSubmissions = toBool(input.freezeSubmissions);
+  }
+  if (input.requireLoginToReview !== undefined) {
+    patch.requireLoginToReview = toBool(input.requireLoginToReview);
+  }
+  if (input.maxReviewsPerSpotPerUser !== undefined) {
+    const n = clampNum(input.maxReviewsPerSpotPerUser, 0, 50, 1);
+    if (!Number.isFinite(Number(input.maxReviewsPerSpotPerUser))) {
+      return json({ error: "Invalid review limit." }, { status: 400 });
+    }
+    patch.maxReviewsPerSpotPerUser = n;
+  }
+  if (input.collaborationDraw !== undefined) {
+    if (!["anyone", "loggedIn", "invitedOnly"].includes(String(input.collaborationDraw))) {
+      return json({ error: "Invalid draw permission." }, { status: 400 });
+    }
+    patch.collaborationDraw = String(input.collaborationDraw);
+  }
+  if (input.trustedContributorIds !== undefined) {
+    patch.trustedContributorIds = String(input.trustedContributorIds ?? "").slice(0, 2000);
+  }
+  if (input.submissionCooldown !== undefined) {
+    const n = clampNum(input.submissionCooldown, 0, 3600, 0);
+    if (!Number.isFinite(Number(input.submissionCooldown))) {
+      return json({ error: "Invalid submission cooldown." }, { status: 400 });
+    }
+    patch.submissionCooldown = n;
+  }
+  // ---- Map experience ----
+  if (input.tiles !== undefined) {
+    if (!["osm", "satellite", "dark"].includes(String(input.tiles))) {
+      return json({ error: "Invalid basemap." }, { status: 400 });
+    }
+    patch.tiles = String(input.tiles);
+  }
+  if (input.minZoom !== undefined) {
+    const n = clampNum(input.minZoom, 1, 18, 3);
+    if (!Number.isFinite(Number(input.minZoom))) {
+      return json({ error: "Invalid minimum zoom." }, { status: 400 });
+    }
+    patch.minZoom = n;
+  }
+  if (input.maxZoom !== undefined) {
+    const n = clampNum(input.maxZoom, 3, 19, 18);
+    if (!Number.isFinite(Number(input.maxZoom))) {
+      return json({ error: "Invalid maximum zoom." }, { status: 400 });
+    }
+    patch.maxZoom = n;
+  }
+  if (input.restrictPan !== undefined) {
+    patch.restrictPan = toBool(input.restrictPan);
+  }
+  if (input.defaultSpotSort !== undefined) {
+    if (!["newest", "rating", "name"].includes(String(input.defaultSpotSort))) {
+      return json({ error: "Invalid default sort." }, { status: 400 });
+    }
+    patch.defaultSpotSort = String(input.defaultSpotSort);
+  }
+  for (const key of ["defaultLayerSpots", "defaultLayerZones", "defaultLayerRoutes", "defaultLayerHeat", "defaultLayerChoropleth", "zoomToUser", "showOnHomepage"] as const) {
+    if (input[key] !== undefined) patch[key] = toBool(input[key]);
+  }
+  if (input.status !== undefined) {
+    if (input.status !== null && !["draft", "published"].includes(String(input.status))) {
+      return json({ error: "Invalid map status." }, { status: 400 });
+    }
+    patch.status = input.status === null ? null : String(input.status);
+  }
+  if (input.mapEmoji !== undefined) {
+    patch.mapEmoji = String(input.mapEmoji ?? "").trim().slice(0, 16);
+  }
+  if (input.region !== undefined) {
+    patch.region = String(input.region ?? "").trim().slice(0, 80);
+  }
+  if (input.announcement !== undefined) {
+    patch.announcement = String(input.announcement ?? "").trim().slice(0, 400);
+  }
   if (input.category !== undefined) {
     if (
       input.category !== "" &&
@@ -473,4 +649,14 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 96) || "map";
+}
+
+function toBool(v: unknown): boolean {
+  return v === false ? false : v === true;
+}
+
+function clampNum(v: unknown, min: number, max: number, def: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
 }

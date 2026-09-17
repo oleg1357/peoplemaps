@@ -181,6 +181,21 @@ export async function updateOwnSpot(
   return res.spot;
 }
 
+// Community "freshness" confirmation: bumps the spot's `lastVerifiedAt` so the
+// staleness badge (° `staleAfterDays`) clears. Any signed-in user may verify.
+export async function verifySpot(spotId: string): Promise<boolean> {
+  if (!backendLive) return true;
+  try {
+    await req("/api/spots", {
+      method: "PATCH",
+      body: JSON.stringify({ spotId, lastVerifiedAt: new Date().toISOString() }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteSpot(spotId: string): Promise<void> {
   if (!backendLive) return demoDeleteSpot(spotId);
   await req(`/api/spots?spotId=${encodeURIComponent(spotId)}`, { method: "DELETE" });
@@ -411,6 +426,35 @@ export interface CreateMapInput {
   allowPhotos?: boolean;
   collaborationMode?: "anyone" | "loggedIn" | "invitedOnly";
   enableClustering?: boolean;
+  choroplethRamp?: "sequential" | "diverging" | null;
+  choroplethMetric?: "priceLevel" | "rating" | null;
+  staleAfterDays?: number | null;
+  requireSpotFields?: string[] | null;
+  suggestedTags?: string | null;
+  allowDuplicateSpots?: boolean | null;
+  defaultSpotStatus?: "open" | "closed" | "unknown" | null;
+  freezeSubmissions?: boolean | null;
+  requireLoginToReview?: boolean | null;
+  maxReviewsPerSpotPerUser?: number | null;
+  collaborationDraw?: "anyone" | "loggedIn" | "invitedOnly" | null;
+  trustedContributorIds?: string | null;
+  submissionCooldown?: number | null;
+  tiles?: "osm" | "satellite" | "dark" | null;
+  minZoom?: number | null;
+  maxZoom?: number | null;
+  restrictPan?: boolean | null;
+  defaultSpotSort?: "newest" | "rating" | "name" | null;
+  defaultLayerSpots?: boolean | null;
+  defaultLayerZones?: boolean | null;
+  defaultLayerRoutes?: boolean | null;
+  defaultLayerHeat?: boolean | null;
+  defaultLayerChoropleth?: boolean | null;
+  zoomToUser?: boolean | null;
+  status?: "draft" | "published" | null;
+  showOnHomepage?: boolean | null;
+  mapEmoji?: string | null;
+  region?: string | null;
+  announcement?: string | null;
   category?: string;
   tags?: string;
 }

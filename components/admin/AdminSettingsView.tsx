@@ -350,6 +350,322 @@ export default function AdminSettingsView({
         />
       </SettingsGroup>
 
+      <SettingsGroup title="Choropleth overlay">
+        <AdminField label="Color ramp">
+          <select
+            className={selectInputCls}
+            value={draft.choroplethRamp ?? "sequential"}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                choroplethRamp: e.target.value as "sequential" | "diverging",
+              })
+            }
+          >
+            <option value="sequential">Sequential (blue → amber → red)</option>
+            <option value="diverging">Diverging (red → amber → green)</option>
+          </select>
+        </AdminField>
+        <AdminField label="Value source">
+          <select
+            className={selectInputCls}
+            value={draft.choroplethMetric ?? "priceLevel"}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                choroplethMetric: e.target.value as "priceLevel" | "rating",
+              })
+            }
+          >
+            <option value="priceLevel">Average spot price level</option>
+            <option value="rating">Average spot rating (reviews)</option>
+          </select>
+        </AdminField>
+        <p className="col-span-full -mt-1 text-xs text-muted-foreground">
+          Used when coloring zones on the map and auto-computing values from the
+          spots inside each zone.
+        </p>
+      </SettingsGroup>
+
+      <SettingsGroup title="Freshness &amp; data quality">
+        <AdminField label="Stale spot threshold (days, 0 = off)">
+          <Input
+            type="number"
+            min={0}
+            max={365}
+            value={draft.staleAfterDays ?? 0}
+            onChange={(e) =>
+              setDraft({ ...draft, staleAfterDays: Number(e.target.value) })
+            }
+          />
+        </AdminField>
+        <AdminField label="Default status for new spots">
+          <select
+            className={selectInputCls}
+            value={draft.defaultSpotStatus ?? "unknown"}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                defaultSpotStatus: e.target.value as "open" | "closed" | "unknown",
+              })
+            }
+          >
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </AdminField>
+        <div className="col-span-full -mt-1 text-xs text-muted-foreground">
+          Fields visitors must fill in when adding a spot:
+        </div>
+        <div className="col-span-full -mt-1 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["street", "Street"],
+              ["city", "City"],
+              ["priceLevel", "Price level"],
+              ["hoursNote", "Opening hours"],
+              ["tags", "Tags"],
+              ["tip", "Insider tip"],
+            ] as const
+          ).map(([value, label]) => {
+            const set = (draft.requireSpotFields ?? []).includes(value);
+            return (
+              <label key={value} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={set}
+                  onChange={(e) => {
+                    const cur = draft.requireSpotFields ?? [];
+                    const next = e.target.checked
+                      ? [...cur, value]
+                      : cur.filter((f) => f !== value);
+                    setDraft({ ...draft, requireSpotFields: next });
+                  }}
+                />
+                {label}
+              </label>
+            );
+          })}
+        </div>
+        <AdminField label="Suggested tags (comma separated)">
+          <Input
+            value={draft.suggestedTags ?? ""}
+            onChange={(e) => setDraft({ ...draft, suggestedTags: e.target.value })}
+            placeholder="e.g. family friendly, hidden gem"
+          />
+        </AdminField>
+        <div className="col-span-full">
+          <ToggleRow
+            checked={draft.allowDuplicateSpots ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, allowDuplicateSpots: c })}
+            label="Allow duplicate spots"
+          />
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup title="Governance" cols={1}>
+        <ToggleRow
+          checked={draft.freezeSubmissions ?? false}
+          onCheckedChange={(c) => setDraft({ ...draft, freezeSubmissions: c })}
+          label="Freeze submissions (map under review)"
+        />
+        <ToggleRow
+          checked={draft.requireLoginToReview ?? false}
+          onCheckedChange={(c) => setDraft({ ...draft, requireLoginToReview: c })}
+          label="Require login to review, comment or vote"
+        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <AdminField label="Max reviews per user per spot (0 = unlimited)">
+            <Input
+              type="number"
+              min={0}
+              max={50}
+              value={draft.maxReviewsPerSpotPerUser ?? 1}
+              onChange={(e) =>
+                setDraft({ ...draft, maxReviewsPerSpotPerUser: Number(e.target.value) })
+              }
+            />
+          </AdminField>
+          <AdminField label="Submission cooldown (seconds)">
+            <Input
+              type="number"
+              min={0}
+              max={3600}
+              value={draft.submissionCooldown ?? 0}
+              onChange={(e) =>
+                setDraft({ ...draft, submissionCooldown: Number(e.target.value) })
+              }
+            />
+          </AdminField>
+        </div>
+        <AdminField label="Who can draw zones and routes">
+          <select
+            className={selectInputCls}
+            value={draft.collaborationDraw ?? "loggedIn"}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                collaborationDraw: e.target.value as "anyone" | "loggedIn" | "invitedOnly",
+              })
+            }
+          >
+            <option value="anyone">Anyone (no login required)</option>
+            <option value="loggedIn">Logged-in users</option>
+            <option value="invitedOnly">Owner &amp; moderators only</option>
+          </select>
+        </AdminField>
+        <AdminField label="Trusted contributors (user ids, comma separated)">
+          <Input
+            value={draft.trustedContributorIds ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, trustedContributorIds: e.target.value })
+            }
+            placeholder="uuid-1,uuid-2"
+          />
+        </AdminField>
+      </SettingsGroup>
+
+      <SettingsGroup title="Map experience">
+        <AdminField label="Default basemap">
+          <select
+            className={selectInputCls}
+            value={draft.tiles ?? "osm"}
+            onChange={(e) =>
+              setDraft({ ...draft, tiles: e.target.value as "osm" | "satellite" | "dark" })
+            }
+          >
+            <option value="osm">Streets</option>
+            <option value="satellite">Satellite</option>
+            <option value="dark">Dark</option>
+          </select>
+        </AdminField>
+        <AdminField label="Default spot sort">
+          <select
+            className={selectInputCls}
+            value={draft.defaultSpotSort ?? "newest"}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                defaultSpotSort: e.target.value as "newest" | "rating" | "name",
+              })
+            }
+          >
+            <option value="newest">Newest first</option>
+            <option value="rating">Highest rated</option>
+            <option value="name">Name (A–Z)</option>
+          </select>
+        </AdminField>
+        <AdminField label="Min zoom">
+          <Input
+            type="number"
+            min={1}
+            max={18}
+            value={draft.minZoom ?? 3}
+            onChange={(e) => setDraft({ ...draft, minZoom: Number(e.target.value) })}
+          />
+        </AdminField>
+        <AdminField label="Max zoom">
+          <Input
+            type="number"
+            min={3}
+            max={19}
+            value={draft.maxZoom ?? 18}
+            onChange={(e) => setDraft({ ...draft, maxZoom: Number(e.target.value) })}
+          />
+        </AdminField>
+        <div className="col-span-full">
+          <ToggleRow
+            checked={draft.restrictPan ?? false}
+            onCheckedChange={(c) => setDraft({ ...draft, restrictPan: c })}
+            label="Restrict panning to the map area"
+          />
+        </div>
+        <div className="col-span-full">
+          <ToggleRow
+            checked={draft.zoomToUser ?? false}
+            onCheckedChange={(c) => setDraft({ ...draft, zoomToUser: c })}
+            label="Zoom to visitor's location on open"
+          />
+        </div>
+        <div className="col-span-full grid grid-cols-1 gap-1.5">
+          <span className="text-xs text-muted-foreground">Visible layers by default:</span>
+          <ToggleRow
+            checked={draft.defaultLayerSpots ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, defaultLayerSpots: c })}
+            label="Spots"
+          />
+          <ToggleRow
+            checked={draft.defaultLayerZones ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, defaultLayerZones: c })}
+            label="Zones"
+          />
+          <ToggleRow
+            checked={draft.defaultLayerRoutes ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, defaultLayerRoutes: c })}
+            label="Routes"
+          />
+          <ToggleRow
+            checked={draft.defaultLayerHeat ?? false}
+            onCheckedChange={(c) => setDraft({ ...draft, defaultLayerHeat: c })}
+            label="Heatmap"
+          />
+          <ToggleRow
+            checked={draft.defaultLayerChoropleth ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, defaultLayerChoropleth: c })}
+            label="Choropleth overlay"
+          />
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup title="Identity &amp; discovery">
+        <AdminField label="Map icon (emoji)">
+          <Input
+            value={draft.mapEmoji ?? ""}
+            onChange={(e) => setDraft({ ...draft, mapEmoji: e.target.value })}
+            placeholder="e.g. 🗺️"
+            maxLength={16}
+          />
+        </AdminField>
+        <AdminField label="Region / language">
+          <Input
+            value={draft.region ?? ""}
+            onChange={(e) => setDraft({ ...draft, region: e.target.value })}
+            placeholder="e.g. Copenhagen"
+          />
+        </AdminField>
+        <div className="col-span-full -mt-1 grid grid-cols-2 gap-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-medium">Map status</label>
+            <select
+              className={selectInputCls}
+              value={draft.status ?? "published"}
+              onChange={(e) =>
+                setDraft({ ...draft, status: e.target.value as "draft" | "published" })
+              }
+            >
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+            </select>
+          </div>
+          <ToggleRow
+            checked={draft.showOnHomepage ?? true}
+            onCheckedChange={(c) => setDraft({ ...draft, showOnHomepage: c })}
+            label="Show on homepage"
+          />
+        </div>
+        <div className="col-span-full">
+          <AdminField label="Announcement banner">
+            <Input
+              value={draft.announcement ?? ""}
+              onChange={(e) => setDraft({ ...draft, announcement: e.target.value })}
+              placeholder="Short banner on the map. Leave empty to hide."
+              maxLength={400}
+            />
+          </AdminField>
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup title="Contact &amp; links">
         <AdminField label="Contact email">
           <Input

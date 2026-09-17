@@ -1,6 +1,6 @@
 import { COLLECTIONS } from "@/lib/mongodb";
 import { withDb, json, error, isValidLatLng, publicContentFilter, rateLimitByIp } from "@/lib/api";
-import { getAdminContext, getMap, canContribute, canModerateMap } from "@/lib/admin";
+import { getAdminContext, getMap, canContribute, canModerateMap, canDraw } from "@/lib/admin";
 import { isBannedOnMap } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
@@ -71,6 +71,9 @@ export async function POST(req: Request) {
 
   const contrib = await canContribute(ctx, map);
   if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
+
+  const draw = await canDraw(ctx, map);
+  if (!draw.ok) return error(draw.reason || "Forbidden", 403);
 
   let moderation: Route["moderation"] = "pending";
   if (await canModerateMap(ctx, mapId).then((r) => r.ok)) {

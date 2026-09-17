@@ -42,13 +42,13 @@ export async function getAdminContext(req: Request): Promise<AdminContext> {
   return { userId: bearer, isGlobalAdmin: isGlobalAdmin(bearer) };
 }
 
-// Fetches all public maps, newest first. Used by the public map client (via the
-// /api/maps route) and the homepage.
+// Fetches all public, published maps (newest first). Used by the public map
+// client (via the /api/maps route) and the homepage.
 export async function getAllPublicMaps(): Promise<MapDocument[]> {
   if (!serverClient) return [];
   try {
     const docs = await serverClient.fetch<MapDocument[]>(
-      `*[_type == "map" && isPublic == "public"] | order(_createdAt desc)${MAP_PROJECTION}`
+      `*[_type == "map" && isPublic == "public" && status != "draft"] | order(_createdAt desc)${MAP_PROJECTION}`
     );
     return docs ?? [];
   } catch {
@@ -208,6 +208,29 @@ export async function canContribute(
     const caps = await getEffectiveCapabilities(map._id, ctx.userId);
     if (caps && caps.includes("approve")) return { ok: true };
     return { ok: false, reason: "Only the map owner and moderators can contribute to this map." };
+  }
+  return { ok: true };
+}
+
+// Enforce a map's zone/route drawing permission. Independent from
+// `collaborationMode` (who may add spots); falls back to it when the map does
+// not set `collaborationDraw`.
+export async function canDraw(
+  ctx: AdminContext,
+  map: MapDocument | null
+): Promise<{ ok: boolean; reason?: string }> {
+  const mode = map?.collaborationDraw ?? map?.collaborationMode ?? "loggedIn";
+  if (mode !== "anyone" && !ctx.userId) {
+    return { ok: false, reason: "You must be signed in to draw on this map." };
+  }
+  if (mode === "invitedOnly") {
+    if (!map) return { ok: false, reason: "Map not found." };
+    if (!ctx.userId) return { ok: false, reason: "You must be signed in to draw on this map." };
+    if (ctx.isGlobalAdmin || map.ownerId === ctx.userId) return { ok: true };
+    return {
+      ok: false,
+      reason: "Only the map owner and moderators can draw on this map.",
+    };
   }
   return { ok: true };
 }

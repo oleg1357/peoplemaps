@@ -38,6 +38,7 @@ import {
   fetchPhotos,
   deleteSpot,
   updateOwnSpot,
+  verifySpot,
   backendLive,
 } from "@/lib/api-client";
 import type { SpotPhoto } from "@/lib/types";
@@ -45,6 +46,10 @@ import type { MapData } from "@/lib/api-client";
 
 const CENTER: [number, number] = [55.6761, 12.5683];
 const ZOOM = 12;
+
+// Bounded clock for staleness math — captured once at module load so the
+// component stays pure (see react-hooks/purity).
+const STALE_NOW = Date.now();
 
 import { userIcon } from "@/lib/leaflet-icons";
 import {
@@ -177,6 +182,8 @@ export function MapsHomePage({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<[number, number] | null>(null);
   const [newName, setNewName] = useState("");
+  const [newStreet, setNewStreet] = useState("");
+  const [newCity, setNewCity] = useState("");
   const [newMarker, setNewMarker] = useState<string | null>(null);
   const [newMarkerColor, setNewMarkerColor] = useState<string | null>(null);
   const [newPriceLevel, setNewPriceLevel] = useState<number | null>(null);
@@ -238,6 +245,14 @@ export function MapsHomePage({
     setMeasureRedo([]);
     setAdding(false);
     setDraft(null);
+    // Apply the map's default experience (basemap, initial layers, sort).
+    setMapStyle(activeMap?.tiles ?? "osm");
+    setShowSpots(activeMap?.defaultLayerSpots ?? true);
+    setShowZones(activeMap?.defaultLayerZones ?? true);
+    setShowRoutes(activeMap?.defaultLayerRoutes ?? true);
+    setChoropleth(activeMap?.defaultLayerChoropleth ?? true);
+    setHeatmap(activeMap?.defaultLayerHeat ?? false);
+    setSelected(null);
     // Fly to the map's configured base center/zoom when switching maps.
     if (baseCenter) {
       viewTargetRef.current = {
@@ -260,6 +275,33 @@ export function MapsHomePage({
     }
     setAdding(true);
   }, [initialAdd, canContribute]);
+
+  // Map-level "freeze submissions" lock: the owner may still contribute, and
+  // drawing is additionally governed by the map's `collaborationDraw`.
+  const isMapOwner = !!(userId && userId === activeMap?.ownerId);
+  const mapFrozen = !!activeMap?.freezeSubmissions && !isMapOwner;
+  const canStartDraw =
+    activeMap?._id && !mapFrozen &&
+    (activeMap.collaborationDraw === "anyone" ||
+      !!userId &&
+      (activeMap.collaborationDraw === "loggedIn" ||
+        (activeMap.collaborationDraw === "invitedOnly" && isMapOwner)));
+
+  // "Zoom to visitor's location on open" map setting.
+  useEffect(() => {
+    if (!activeMap?._id || activeMap.zoomToUser !== true) return;
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+        viewTargetRef.current = {
+          center: [pos.coords.latitude, pos.coords.longitude],
+          zoom: 15,
+        };
+      },
+      () => {}
+    );
+  }, [activeMap?._id, activeMap?.zoomToUser]);
 
   const pickMarkerEmoji =
     newMarker ?? activeMap?.defaultMarker ?? DEFAULT_MARKER.emoji;
@@ -287,6 +329,33 @@ export function MapsHomePage({
     return out;
   }, [mapData.reviews]);
 
+  // Freshness: a spot needing verification is one that hasn't been confirmed
+  // (created/edited/verified) within the map's `staleAfterDays` window.
+  const staleDays = activeMap?.staleAfterDays ?? 0;
+  const staleThreshold = staleDays > 0 ? STALE_NOW - staleDays * 86400000 : null;
+  const isSpotStale = useCallback(
+    (s: Spot): boolean => {
+      if (!staleThreshold) return false;
+      const ref = s.lastVerifiedAt ?? s.updatedAt ?? s.createdAt;
+      if (!ref) return false;
+      const t = Date.parse(ref);
+      return Number.isFinite(t) && t < staleThreshold;
+    },
+    [staleThreshold]
+  );
+
+  // Duplicate guard: when the map disallows duplicates, warn as soon as the
+  // typed name matches an existing spot on the map.
+  const duplicateWarning = useMemo(() => {
+    if (activeMap?.allowDuplicateSpots !== false || !newName.trim()) return null;
+    const match = spots.find(
+      (s) => s.name.trim().toLowerCase() === newName.trim().toLowerCase()
+    );
+    return match
+      ? `A spot named “${match.name}” already exists on this map.`
+      : null;
+  }, [activeMap?.allowDuplicateSpots, newName, spots]);
+
   // Search/filter derived views. A spot matches when the query is a
   // case-insensitive substring of its name, city, street or tags.
   const q = searchQuery.trim().toLowerCase();
@@ -313,10 +382,23 @@ export function MapsHomePage({
           return avg !== undefined && avg >= minRating;
         })
       : tagFiltered;
-  const visibleSpots = useMemo(
-    () => (showSpots ? ratingFiltered : []),
-    [showSpots, ratingFiltered]
-  );
+  const visibleSpots = useMemo(() => {
+    if (!showSpots) return [];
+    const sortMode = activeMap?.defaultSpotSort ?? "newest";
+    const list = [...ratingFiltered];
+    if (sortMode === "rating") {
+      list.sort(
+        (a, b) =>
+          (avgBySpot.get(b._id ?? "") ?? -1) - (avgBySpot.get(a._id ?? "") ?? -1) ||
+          (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
+      );
+    } else if (sortMode === "name") {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      list.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    }
+    return list;
+  }, [showSpots, ratingFiltered, avgBySpot, activeMap?.defaultSpotSort]);
   const visibleZones = showZones ? zones : [];
   const visibleRoutes = showRoutes ? routes : [];
 
@@ -520,6 +602,20 @@ export function MapsHomePage({
     }));
   };
 
+  const handleVerify = async () => {
+    if (!selected?._id) return;
+    await verifySpot(selected._id);
+    const now = new Date().toISOString();
+    patchMapData((d) => ({
+      ...d,
+      spots: d.spots.map((sp) =>
+        sp._id === selected._id
+          ? { ...sp, lastVerifiedAt: now, updatedAt: now }
+          : sp
+      ),
+    }));
+  };
+
   const handleVote = async (reviewId: string) => {
     const res = await toggleHelpfulReview(reviewId, userId);
     if (res) {
@@ -691,6 +787,15 @@ export function MapsHomePage({
   };
 
   const startDraw = (mode: "zone" | "route") => {
+    // Gate by the map's drawing permission + freeze state.
+    if (!canStartDraw) {
+      setAddError(
+        mapFrozen
+          ? "Submissions are frozen for this map."
+          : "You must be signed in to draw on this map."
+      );
+      return;
+    }
     // Drawing and spot-adding are mutually exclusive.
     setAdding(false);
     setDraft(null);
@@ -938,12 +1043,37 @@ export function MapsHomePage({
       setAddError("You must be signed in to add a spot.");
       return;
     }
+    if (mapFrozen) {
+      setAddError("Submissions are frozen for this map.");
+      return;
+    }
+    // Map-level required fields.
+    const reqFields = activeMap.requireSpotFields ?? [];
+    const missing = reqFields.filter((f) => {
+      switch (f) {
+        case "street": return !newStreet.trim();
+        case "city": return !newCity.trim();
+        case "priceLevel": return newPriceLevel === null;
+        case "hoursNote": return !newHoursNote.trim();
+        case "tags": return !newTagsText.trim();
+        case "tip": return !newTip.trim();
+        default: return false;
+      }
+    });
+    if (missing.length > 0) {
+      setAddError(`Missing required field(s): ${missing.join(", ")}`);
+      return;
+    }
+    if (activeMap.allowDuplicateSpots === false && duplicateWarning) {
+      setAddError(duplicateWarning);
+      return;
+    }
     try {
       const spot = await addSpot({
         mapId: activeMap._id,
         name: newName.trim(),
-        street: "",
-        city: "",
+        street: newStreet.trim(),
+        city: newCity.trim(),
         zip: 0,
         lat: draft[0],
         lng: draft[1],
@@ -954,8 +1084,11 @@ export function MapsHomePage({
         hoursNote: newHoursNote.trim(),
         tags: newTagsText.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 8),
         tip: newTip.trim(),
+        status: activeMap.defaultSpotStatus ?? "unknown",
       });
       setNewName("");
+      setNewStreet("");
+      setNewCity("");
       setNewPriceLevel(null);
       setNewHoursNote("");
       setNewTagsText("");
@@ -1046,8 +1179,9 @@ export function MapsHomePage({
               if (m) router.replace(buildPermalink(m, true));
             }}
           >
-            {(maps as Array<{ _id: string; title: string }>).map((m) => (
+            {(maps as Array<{ _id: string; title: string; mapEmoji?: string | null }>).map((m) => (
               <option key={m._id} value={m._id}>
+                {m.mapEmoji ? `${m.mapEmoji} ` : ""}
                 {m.title}
               </option>
             ))}
@@ -1075,6 +1209,10 @@ export function MapsHomePage({
           setAddError("");
           cancelDraw();
           cancelMeasure();
+          if (mapFrozen) {
+            setAddError("Submissions are frozen for this map.");
+            return;
+          }
           if (!canContribute) {
             setAddError("You must be signed in to add a spot.");
             return;
@@ -1090,7 +1228,7 @@ export function MapsHomePage({
         id="add-zone-fab"
         type="button"
         className={`draw-fab ${drawMode === "zone" ? "cancel" : ""}`}
-        disabled={maps.length === 0}
+        disabled={maps.length === 0 || !canStartDraw}
         onClick={() => startDraw("zone")}
         title={maps.length === 0 ? "Create a map first (Map Admin) to add zones" : "Draw a zone (area) on the map"}
       >
@@ -1101,7 +1239,7 @@ export function MapsHomePage({
         id="add-route-fab"
         type="button"
         className={`draw-fab ${drawMode === "route" ? "cancel" : ""}`}
-        disabled={maps.length === 0}
+        disabled={maps.length === 0 || !canStartDraw}
         onClick={() => startDraw("route")}
         title={maps.length === 0 ? "Create a map first (Map Admin) to add routes" : "Draw a route (path) on the map"}
       >
@@ -1138,6 +1276,18 @@ export function MapsHomePage({
       {maps.length === 0 && !adding && (
         <div id="map-note">
           No maps available yet. Create your first map from <a href="/dashboard">your dashboard</a>.
+        </div>
+      )}
+
+      {activeMap?.announcement && (
+        <div
+          id="map-note"
+          className="map-announcement"
+          style={{
+            borderColor: activeMap.accentColor ?? DEFAULT_MARKER.color,
+          }}
+        >
+          {activeMap.announcement}
         </div>
       )}
 
@@ -1241,11 +1391,14 @@ export function MapsHomePage({
           selected={selected}
           bundle={bundle}
           status={status}
+          stale={selected ? isSpotStale(selected) : false}
+          onVerify={handleVerify}
           onStatus={handleStatus}
           userId={userId}
           allowReviews={activeMap?.allowReviews ?? true}
           allowComments={activeMap?.allowComments ?? true}
           allowPhotos={activeMap?.allowPhotos ?? true}
+          requireLoginToReview={activeMap?.requireLoginToReview ?? false}
           editingSpot={editingSpot}
           setEditingSpot={setEditingSpot}
           startEditSpot={startEditSpot}
@@ -1301,7 +1454,22 @@ export function MapsHomePage({
         />
       )}
 
-      <MapContainer center={mapCenter} zoom={mapZoom} zoomSnap={0.5} style={{ height: "100%", width: "100%" }}>
+      <MapContainer
+        center={mapCenter}
+        zoom={mapZoom}
+        zoomSnap={0.5}
+        minZoom={activeMap?.minZoom ?? 3}
+        maxZoom={activeMap?.maxZoom ?? 18}
+        maxBounds={
+          activeMap?.restrictPan && baseCenter
+            ? [
+                [baseCenter.lat - 25, baseCenter.lng - 30],
+                [baseCenter.lat + 25, baseCenter.lng + 30],
+              ]
+            : undefined
+        }
+        style={{ height: "100%", width: "100%" }}
+      >
         <TileLayer
           attribution={tiles.attribution}
           url={tiles.url}
@@ -1627,6 +1795,10 @@ export function MapsHomePage({
         <AddSpotForm
           newName={newName}
           setNewName={setNewName}
+          newStreet={newStreet}
+          setNewStreet={setNewStreet}
+          newCity={newCity}
+          setNewCity={setNewCity}
           pickMarkerEmoji={pickMarkerEmoji}
           pickMarkerColor={pickMarkerColor}
           setNewMarker={setNewMarker}
@@ -1635,8 +1807,14 @@ export function MapsHomePage({
           setHoursNote={setNewHoursNote}
           setTagsText={setNewTagsText}
           setTip={setNewTip}
+          suggestedTags={activeMap?.suggestedTags ?? ""}
+          requireSpotFields={activeMap?.requireSpotFields ?? []}
+          duplicateWarning={duplicateWarning}
           activeMap={activeMap}
           onSubmit={handleAddSpot}
+          onTagSuggestion={(tag) =>
+            setNewTagsText((prev) => (prev ? `${prev.replace(/,\s*$/, "")}, ` : "") + tag)
+          }
         />
       )}
 

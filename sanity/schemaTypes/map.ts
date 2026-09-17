@@ -248,6 +248,242 @@ export const map = defineType({
       description: "Free-form keywords for discovery (comma separated).",
       type: "string",
     }),
+    // ---- Freshness / data quality ----
+    defineField({
+      name: "staleAfterDays",
+      title: "Stale spot threshold (days)",
+      description:
+        "Spots not verified within this many days are shown as 'needs verification'. 0 disables staleness tracking.",
+      type: "number",
+      initialValue: 0,
+      validation: (rule) => rule.min(0).max(365),
+    }),
+    defineField({
+      name: "requireSpotFields",
+      title: "Required fields for new spots",
+      description: "Fields visitors must fill in when adding a spot.",
+      type: "array",
+      of: [{ type: "string" }],
+      options: {
+        list: [
+          { title: "Street", value: "street" },
+          { title: "City", value: "city" },
+          { title: "Price level", value: "priceLevel" },
+          { title: "Opening hours", value: "hoursNote" },
+          { title: "Tags", value: "tags" },
+          { title: "Insider tip", value: "tip" },
+        ],
+        layout: "tags",
+      },
+    }),
+    defineField({
+      name: "suggestedTags",
+      title: "Suggested tags",
+      description: "Comma-separated tag suggestions shown in the add-spot form.",
+      type: "string",
+    }),
+    defineField({
+      name: "allowDuplicateSpots",
+      title: "Allow duplicate spots",
+      description:
+        "When off, contributors are warned when a spot with the same name already exists.",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "defaultSpotStatus",
+      title: "Default status for new spots",
+      description: "Status applied to spots added to this map.",
+      type: "string",
+      options: {
+        list: [
+          { title: "Open", value: "open" },
+          { title: "Closed", value: "closed" },
+          { title: "Unknown", value: "unknown" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "unknown",
+    }),
+    // ---- Governance ----
+    defineField({
+      name: "freezeSubmissions",
+      title: "Freeze submissions",
+      description: "When on, no one (except owners/moderators) can add or change content.",
+      type: "boolean",
+      initialValue: false,
+    }),
+    defineField({
+      name: "requireLoginToReview",
+      title: "Require login to review or vote",
+      description: "When on, anonymous visitors cannot rate, review, comment or vote.",
+      type: "boolean",
+      initialValue: false,
+    }),
+    defineField({
+      name: "maxReviewsPerSpotPerUser",
+      title: "Max reviews per user per spot (0 = unlimited)",
+      type: "number",
+      initialValue: 1,
+      validation: (rule) => rule.min(0).max(50),
+    }),
+    defineField({
+      name: "collaborationDraw",
+      title: "Who can draw zones and routes",
+      description:
+        "Separate from 'who can add spots'. Controls zone/route drawing only.",
+      type: "string",
+      options: {
+        list: [
+          { title: "Anyone (no login required)", value: "anyone" },
+          { title: "Logged-in users", value: "loggedIn" },
+          { title: "Owner & moderators only", value: "invitedOnly" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "loggedIn",
+    }),
+    defineField({
+      name: "trustedContributorIds",
+      title: "Trusted contributors",
+      description:
+        "Supabase user ids whose spot submissions skip the approval queue. Comma separated.",
+      type: "string",
+    }),
+    defineField({
+      name: "submissionCooldown",
+      title: "Submission cooldown (seconds)",
+      description: "Minimum time between submissions from the same visitor. 0 = off.",
+      type: "number",
+      initialValue: 0,
+      validation: (rule) => rule.min(0).max(3600),
+    }),
+    // ---- Map experience ----
+    defineField({
+      name: "tiles",
+      title: "Default basemap",
+      type: "string",
+      options: {
+        list: [
+          { title: "Streets", value: "osm" },
+          { title: "Satellite", value: "satellite" },
+          { title: "Dark", value: "dark" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "osm",
+    }),
+    defineField({
+      name: "minZoom",
+      title: "Minimum zoom",
+      type: "number",
+      initialValue: 3,
+      validation: (rule) => rule.min(1).max(18),
+    }),
+    defineField({
+      name: "maxZoom",
+      title: "Maximum zoom",
+      type: "number",
+      initialValue: 18,
+      validation: (rule) => rule.min(3).max(19),
+    }),
+    defineField({
+      name: "restrictPan",
+      title: "Restrict panning to the map area",
+      description: "Keeps visitors from panning far away from the map's center.",
+      type: "boolean",
+      initialValue: false,
+    }),
+    defineField({
+      name: "defaultSpotSort",
+      title: "Default spot sort",
+      type: "string",
+      options: {
+        list: [
+          { title: "Newest first", value: "newest" },
+          { title: "Highest rated", value: "rating" },
+          { title: "Name (A–Z)", value: "name" },
+        ],
+      },
+      initialValue: "newest",
+    }),
+    defineField({
+      name: "defaultLayerSpots",
+      title: "Show spots by default",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "defaultLayerZones",
+      title: "Show zones by default",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "defaultLayerRoutes",
+      title: "Show routes by default",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "defaultLayerHeat",
+      title: "Show heatmap by default",
+      type: "boolean",
+      initialValue: false,
+    }),
+    defineField({
+      name: "defaultLayerChoropleth",
+      title: "Show choropleth by default",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "zoomToUser",
+      title: "Zoom to visitor's location on open",
+      description: "Asks for location permission and centers the map on the visitor.",
+      type: "boolean",
+      initialValue: false,
+    }),
+    // ---- Identity / discovery ----
+    defineField({
+      name: "status",
+      title: "Map status",
+      description: "Draft maps are hidden from the homepage until published.",
+      type: "string",
+      options: {
+        list: [
+          { title: "Draft", value: "draft" },
+          { title: "Published", value: "published" },
+        ],
+        layout: "radio",
+      },
+      initialValue: "published",
+    }),
+    defineField({
+      name: "showOnHomepage",
+      title: "Show on homepage",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "mapEmoji",
+      title: "Map icon (emoji)",
+      description: "Small icon shown next to the map title.",
+      type: "string",
+    }),
+    defineField({
+      name: "region",
+      title: "Region / language",
+      description: "Free-form region label (e.g. 'Copenhagen', 'Berlin').",
+      type: "string",
+    }),
+    defineField({
+      name: "announcement",
+      title: "Announcement banner",
+      description: "Short on-map banner. Leave empty to hide.",
+      type: "text",
+      rows: 2,
+    }),
   ],
   preview: {
     select: {

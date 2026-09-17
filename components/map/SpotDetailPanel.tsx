@@ -26,6 +26,9 @@ interface SpotDetailPanelProps {
   selected: Spot;
   bundle: SpotDetailBundle;
   status: SpotStatus;
+  stale?: boolean;
+  onVerify?: () => void;
+  requireLoginToReview?: boolean;
   onStatus: (s: SpotStatus) => void;
   userId: string | null;
   allowReviews?: boolean;
@@ -89,6 +92,9 @@ export function SpotDetailPanel({
   selected,
   bundle,
   status,
+  stale = false,
+  onVerify,
+  requireLoginToReview = false,
   onStatus,
   userId,
   allowReviews,
@@ -201,6 +207,24 @@ export function SpotDetailPanel({
             ))}
           </div>
         </div>
+        {stale && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-none border border-warning/50 bg-warning/10 px-3 py-2 text-[13px]">
+            <span className="text-warning">⚠ Needs verification</span>
+            {userId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                onClick={onVerify}
+              >
+                I checked it — still valid
+              </Button>
+            ) : (
+              <span className="text-muted-foreground">Sign in to confirm it is still up to date.</span>
+            )}
+          </div>
+        )}
         {(selected.priceLevel !== undefined && selected.priceLevel !== null) ||
         selected.hoursNote ||
         (selected.tags && selected.tags.length > 0) ||
@@ -361,6 +385,10 @@ export function SpotDetailPanel({
           <>
             {allowReviews === false ? (
               <p className="italic muted">Reviews are disabled for this map.</p>
+            ) : requireLoginToReview && !userId ? (
+              <p className="italic muted">
+                You must be signed in to review or vote on this map.
+              </p>
             ) : (
               <>
                 <h3 className="mt-0 mb-2 text-base font-bold">Add a review</h3>
@@ -426,6 +454,7 @@ export function SpotDetailPanel({
                           : "border-transparent text-muted-foreground hover:text-green-dark"
                       )}
                       onClick={() => r._id && handleVote(r._id)}
+                      disabled={requireLoginToReview && !userId}
                     >
                       Helpful{r.helpfulCount ? ` (${r.helpfulCount})` : ""}
                     </button>

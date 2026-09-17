@@ -6,7 +6,7 @@ import { isBannedOnMap } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
 import { applyAutoModeration } from "@/lib/moderation-rules";
 import { sanitizeMarkerEmoji, hasValidColor } from "@/lib/markers-data";
-import type { Spot } from "@/lib/types";
+import type { Spot, SpotStatus } from "@/lib/types";
 
 // Public (map-visible) spots: approved or pre-moderation, never hidden.
 function publicSpotsQuery(mapId: string) {
@@ -53,15 +53,37 @@ export async function POST(req: Request) {
   const userId = ctx.userId;
   const map = await getMap(mapId);
 
+  // Locked maps reject every submission except owner/moderator actions.
+  if (map?.freezeSubmissions) {
+    const canEdit = await canModerateMap(ctx, mapId);
+    if (!canEdit.ok) return error("Submissions are frozen for this map.", 403);
+  }
+
+  // Per-map submission cooldown (seconds) enforced per visitor.
+  const cooldown = map?.submissionCooldown ?? 0;
+  if (cooldown > 0) {
+    const cd = await rateLimitByIp(req, 1, cooldown * 1000, `cooldown:${mapId}`);
+    if (!cd.ok) {
+      return error("Please wait before submitting again.", 429);
+    }
+  }
+
   // Enforce collaboration mode (anyone / loggedIn / invitedOnly).
   const contrib = await canContribute(ctx, map);
   if (!contrib.ok) return error(contrib.reason || "Forbidden", 403);
 
   let moderation: Spot["moderation"] = "pending";
   // Trusted authors and maps with approval disabled get auto-approved.
+  const trusted =
+    !!userId &&
+    (map?.trustedContributorIds ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .includes(userId);
   if (await canModerateMap(ctx, mapId).then((r) => r.ok)) {
     moderation = "approved";
-  } else if (map && map.requireApproval === false) {
+  } else if (map && (map.requireApproval === false || trusted)) {
     moderation = "approved";
   }
 
@@ -81,6 +103,25 @@ export async function POST(req: Request) {
         .slice(0, 8)
     : [];
   const tip = String(body.tip ?? "").slice(0, 280) || null;
+
+  // Map-level required fields are enforced here, not just in the UI.
+  if (map?.requireSpotFields?.length) {
+    const required = map.requireSpotFields;
+    const missing = required.filter((f) => {
+      switch (f) {
+        case "street": return !street;
+        case "city": return !city;
+        case "priceLevel": return priceLevel === null;
+        case "hoursNote": return !hoursNote;
+        case "tags": return tags.length === 0;
+        case "tip": return !tip;
+        default: return false;
+      }
+    });
+    if (missing.length > 0) {
+      return error(`Missing required field(s): ${missing.join(", ")}`, 400);
+    }
+  }
 
   if (moderation === "pending") {
     const auto = await applyAutoModeration(mapId, {
@@ -102,10 +143,14 @@ export async function POST(req: Request) {
     lng: Number(body.lng),
     createdBy: userId,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     moderation,
     hidden: false,
     reviewNote: null,
     marker: marker ?? undefined,
+    status: ["open", "closed", "unknown"].includes(String(body.status))
+      ? (String(body.status) as SpotStatus)
+      : (map?.defaultSpotStatus ?? "unknown"),
     priceLevel,
     hoursNote,
     tags,
@@ -178,6 +223,7 @@ export async function PATCH(req: Request) {
     hoursNote?: string | null;
     tags?: string[] | null;
     tip?: string | null;
+    lastVerifiedAt?: string | null;
   };
   if (!body.spotId) return error("Missing spotId");
   const spotId = body.spotId;
@@ -191,11 +237,32 @@ export async function PATCH(req: Request) {
     });
     if (!existing) return error("Spot not found", 404);
 
+    // A "freshness verification" only touches lastVerifiedAt and is allowed for
+    // any signed-in user (it records community confirmation, not an edit).
+    const contentKeys: (keyof typeof body)[] = [
+      "name", "street", "city", "zip", "lat", "lng", "marker", "markerColor",
+      "priceLevel", "hoursNote", "tags", "tip",
+    ];
+    const verifyOnly =
+      body.lastVerifiedAt !== undefined &&
+      contentKeys.every((k) => body[k] === undefined);
+    if (!verifyOnly && body.lastVerifiedAt !== undefined) {
+      return error("Verification cannot be combined with edits.", 400);
+    }
+
+    // Locked maps: only the owner/moderators may edit content. Verification is
+    // always allowed (it is a community freshness signal).
+    const map = existing.mapId ? await getMap(existing.mapId) : null;
+    if (!verifyOnly && map?.freezeSubmissions &&
+        !(await canModerateMap(ctx, existing.mapId).then((r) => r.ok))) {
+      return error("Submissions are frozen for this map.", 403);
+    }
+
     if (await isBannedOnMap(db, existing.mapId, userId)) {
       return error("You are banned from contributing to this map.", 403);
     }
 
-    if (existing.createdBy !== userId) {
+    if (!verifyOnly && existing.createdBy !== userId) {
       const perm = await canModerateMap(ctx, existing.mapId);
       if (!perm.ok) return error("You can only edit your own spots.", 403);
     }
@@ -250,8 +317,12 @@ export async function PATCH(req: Request) {
     if (body.tip !== undefined) {
       set.tip = String(body.tip ?? "").slice(0, 280) || null;
     }
+    if (body.lastVerifiedAt !== undefined) {
+      set.lastVerifiedAt = String(body.lastVerifiedAt ?? "").slice(0, 40);
+    }
 
     if (Object.keys(set).length === 0) return error("Nothing to update");
+    set.updatedAt = new Date().toISOString();
 
     await col.updateOne(byIdFilter<Spot>(oid), { $set: set });
     await logActivity({
